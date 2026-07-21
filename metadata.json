@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Trueline Support Desk",
+  "description": "A high-performance CRM ticketing support system for Trueline Solution, featuring issue categorization, conversation logs, and support agent dashboarding inspired by 365 CRM.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
