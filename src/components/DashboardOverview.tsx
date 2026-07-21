@@ -6,19 +6,21 @@ import { Ticket } from '../types';
 interface DashboardOverviewProps {
   tickets: Ticket[];
   onNavigateToSupport: () => void;
+  onNavigateToSaaSSupport?: () => void;
   isAgentMode: boolean;
 }
 
 export default function DashboardOverview({
   tickets,
   onNavigateToSupport,
+  onNavigateToSaaSSupport,
   isAgentMode
 }: DashboardOverviewProps) {
   const openCount = tickets.filter(t => t.status === 'open').length;
   const inProgressCount = tickets.filter(t => t.status === 'in_progress').length;
 
   return (
-    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#f3f2f1] font-sans text-[#323130]">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#f3f2f1] font-sans text-[#323130]">
       {/* Dashboard Top Header */}
       <div className="bg-white border-b border-[#edebe9] px-6 py-4 flex items-center justify-between shadow-sm shrink-0">
         <div>
@@ -59,6 +61,35 @@ export default function DashboardOverview({
               </span>
             </div>
           </div>
+        </div>
+
+        {/* SaaS Platform Error & Ticket Alert banner */}
+        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 border-l-4 border-purple-600 rounded-sm p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="bg-purple-100/80 text-purple-700 p-2 rounded-sm shrink-0 mt-0.5">
+              <Lucide.ShieldAlert size={18} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                <span>Encountering an Error or Bug in 365 CRM?</span>
+                <span className="text-[9px] bg-purple-100 text-purple-700 font-extrabold px-1.5 py-0.5 rounded-sm uppercase tracking-wide border border-purple-200">
+                  Direct SaaS Support
+                </span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
+                If you encounter subscription issues, billing failures, custom feature needs, or any platform errors, you can raise an instant ticket directly to our 365 CRM Super Administrator team.
+              </p>
+            </div>
+          </div>
+          {onNavigateToSaaSSupport && (
+            <button
+              onClick={onNavigateToSaaSSupport}
+              className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-3.5 py-2 rounded-sm shadow-xs transition-colors cursor-pointer whitespace-nowrap self-start md:self-auto flex items-center gap-1.5"
+            >
+              <Lucide.LifeBuoy size={14} />
+              <span>Raise Ticket to SaaS</span>
+            </button>
+          )}
         </div>
 
         {/* CRM KPI Metrics - Geometric left border styled */}
@@ -195,21 +226,30 @@ export default function DashboardOverview({
               {/* Fast links panel */}
               <div className="pt-2 border-t border-[#edebe9] space-y-2">
                 <p className="text-[10px] font-extrabold text-[#605e5c] uppercase tracking-widest">Fast Actions</p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     onClick={onNavigateToSupport}
-                    className="p-2.5 bg-[#f3f2f1] hover:bg-[#edebe9] border border-[#edebe9] text-[#323130] rounded-sm font-bold text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer text-xs"
+                    className="p-2 bg-[#f3f2f1] hover:bg-[#edebe9] border border-[#edebe9] text-[#323130] rounded-sm font-bold text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer text-[11px]"
                   >
-                    <Lucide.Ticket size={16} className="text-[#0078d4]" />
+                    <Lucide.Ticket size={14} className="text-[#0078d4]" />
                     <span>Create Ticket</span>
                   </button>
                   <button
                     onClick={onNavigateToSupport}
-                    className="p-2.5 bg-[#0078d4] hover:bg-[#106ebe] text-white rounded-sm font-bold text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer text-xs"
+                    className="p-2 bg-[#0078d4] hover:bg-[#106ebe] text-white rounded-sm font-bold text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer text-[11px]"
                   >
-                    <Lucide.Users size={16} />
+                    <Lucide.Users size={14} />
                     <span>Support Queue</span>
                   </button>
+                  {onNavigateToSaaSSupport && (
+                    <button
+                      onClick={onNavigateToSaaSSupport}
+                      className="p-2 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 rounded-sm font-bold text-center flex flex-col items-center justify-center gap-1 transition-all cursor-pointer text-[11px]"
+                    >
+                      <Lucide.LifeBuoy size={14} />
+                      <span>SaaS Support</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

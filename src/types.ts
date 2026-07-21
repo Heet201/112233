@@ -13,8 +13,28 @@ export interface TicketMessage {
   attachmentSize?: string;
 }
 
+export interface Tenant {
+  id: string;
+  companyName: string;
+  ownerName: string;
+  ownerEmail: string;
+  plan: 'Standard' | 'Premium' | 'Enterprise';
+  status: 'active' | 'inactive';
+  mrr: number; // monthly recurring revenue
+  createdAt: string;
+  // Public helpdesk styling & settings
+  themeColor: 'blue' | 'emerald' | 'slate' | 'ruby' | 'orange';
+  headline: string;
+  subtitle: string;
+  supportEmail: string;
+  enableAttachments: boolean;
+  logoText: string;
+}
+
 export interface Ticket {
   id: string; // e.g. "TL-4820"
+  tenantId?: string; // Tenant separation id
+  raisedToSaaS?: boolean; // True if raised by subscriber to SaaS super admins
   title: string;
   description: string;
   category: TicketCategory;

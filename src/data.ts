@@ -1,4 +1,4 @@
-import { Ticket, Agent, CategoryDetail, CRMContact } from './types';
+import { Ticket, Agent, CategoryDetail, CRMContact, Tenant } from './types';
 
 export const SUPPORT_CATEGORIES: CategoryDetail[] = [
   {
@@ -122,7 +122,138 @@ export const MOCK_AGENTS: Agent[] = [
   }
 ];
 
-export const MOCK_TICKETS: Ticket[] = [];
+export const INITIAL_TENANTS: Tenant[] = [
+  {
+    id: 'custom',
+    companyName: 'Trueline Solutions',
+    ownerName: 'Heet Dhameliya',
+    ownerEmail: 'heet@truelinesolution.com',
+    plan: 'Enterprise',
+    status: 'active',
+    mrr: 499,
+    createdAt: '2026-01-10T12:00:00Z',
+    themeColor: 'blue',
+    headline: 'Trueline Solutions Help Center',
+    subtitle: 'Search articles or submit a technical helpdesk ticket to our experts',
+    supportEmail: 'support@truelinesolution.com',
+    enableAttachments: true,
+    logoText: 'TL'
+  },
+  {
+    id: 'tesla',
+    companyName: 'Tesla India',
+    ownerName: 'Elon Musk',
+    ownerEmail: 'elon@tesla.com',
+    plan: 'Premium',
+    status: 'active',
+    mrr: 299,
+    createdAt: '2026-04-15T09:30:00Z',
+    themeColor: 'emerald',
+    headline: 'Tesla India Service Center',
+    subtitle: 'Submit tickets for vehicle delivery, software updates, and Supercharger access',
+    supportEmail: 'service@tesla.com',
+    enableAttachments: true,
+    logoText: 'TSLA'
+  },
+  {
+    id: 'acme',
+    companyName: 'Acme Corporation',
+    ownerName: 'Wile E. Coyote',
+    ownerEmail: 'wile@acme.com',
+    plan: 'Standard',
+    status: 'active',
+    mrr: 149,
+    createdAt: '2026-05-20T14:45:00Z',
+    themeColor: 'ruby',
+    headline: 'Acme Corp Anvil Helpdesk',
+    subtitle: 'Official customer support for explosive devices, rocket skates, and giant magnets',
+    supportEmail: 'orders@acme.com',
+    enableAttachments: false,
+    logoText: 'ACME'
+  }
+];
+
+export const MOCK_TICKETS: Ticket[] = [
+  {
+    id: 'TL-4820',
+    tenantId: 'custom',
+    title: 'CSV lead import failing on HRMS panel',
+    description: 'Every time I upload my staff attendance spreadsheet, it fails with a type mismatch code 402 on line 12. Kindly check why our Custom Attendance columns are failing to map.',
+    category: 'lead_mgmt',
+    subCategory: 'CSV lead import failing/mapping error',
+    status: 'open',
+    priority: 'high',
+    customerName: 'Rajesh Mehta',
+    customerEmail: 'rajesh@apexcorp.in',
+    customerPhone: '+91 98765 43210',
+    createdAt: '2026-07-20T11:00:00.000Z',
+    updatedAt: '2026-07-21T02:30:00.000Z',
+    messages: [
+      {
+        id: 'msg-1',
+        sender: 'customer',
+        senderName: 'Rajesh Mehta',
+        message: 'Hello, the CSV file containing 50 leads is rejecting all database inserts. Please resolve on high priority.',
+        createdAt: '2026-07-20T11:00:00.000Z'
+      }
+    ]
+  },
+  {
+    id: 'TSLA-9021',
+    tenantId: 'tesla',
+    title: 'Full Self-Driving (FSD) v12 update stuck at 99%',
+    description: 'My Model S Plaid is trying to install FSD v12 over Wi-Fi but it gets stuck at 99% calibration and says installation timeout.',
+    category: 'crm_config',
+    subCategory: 'Field customization & layout issues',
+    status: 'in_progress',
+    priority: 'critical',
+    customerName: 'Nikhil Patil',
+    customerEmail: 'nikhil@tesla-owner.in',
+    customerPhone: '+91 91234 56789',
+    assignedAgentId: 'agt-102',
+    createdAt: '2026-07-19T08:00:00.000Z',
+    updatedAt: '2026-07-21T01:15:00.000Z',
+    messages: [
+      {
+        id: 'msg-t1',
+        sender: 'customer',
+        senderName: 'Nikhil Patil',
+        message: 'Please push the forced software reinstall signal to my VIN. Wi-Fi has excellent speed.',
+        createdAt: '2026-07-19T08:00:00.000Z'
+      },
+      {
+        id: 'msg-t2',
+        sender: 'agent',
+        senderName: 'Heet Dhameliya',
+        message: 'Hello Nikhil, I have analyzed your vehicles network telemetry logs. I am sending a forced OTA patch command now. Please let the car sleep for 15 minutes and try again.',
+        createdAt: '2026-07-19T10:30:00.000Z'
+      }
+    ]
+  },
+  {
+    id: 'ACME-1002',
+    tenantId: 'acme',
+    title: 'Rocket Skates fuel pump leaking explosive fluid',
+    description: 'The rocket skates I purchased to capture a very fast desert bird keep leaking premium kerosene. This is a major hazard when skating near canyon cliffs.',
+    category: 'others',
+    subCategory: 'Report general performance bug',
+    status: 'open',
+    priority: 'high',
+    customerName: 'Wile E. Coyote',
+    customerEmail: 'wile@desert-coyote.org',
+    createdAt: '2026-07-20T16:20:00.000Z',
+    updatedAt: '2026-07-20T16:20:00.000Z',
+    messages: [
+      {
+        id: 'msg-a1',
+        sender: 'customer',
+        senderName: 'Wile E. Coyote',
+        message: 'The fuel line seal blew out on first ignition. Send a replacement gasket under warranty!',
+        createdAt: '2026-07-20T16:20:00.000Z'
+      }
+    ]
+  }
+];
 
 export const MOCK_CONTACTS: CRMContact[] = [
   { id: '1', name: 'Rajesh Mehta', company: 'Apex Corp', email: 'rajesh@apexcorp.in', phone: '+91 98765 43210', status: 'Hot Lead', value: '₹4,50,000' },

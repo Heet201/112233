@@ -22,7 +22,8 @@ import {
   Ticket,
   ShieldAlert,
   Sliders,
-  HelpCircle
+  HelpCircle,
+  LifeBuoy
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -46,7 +47,7 @@ export default function Sidebar({
   const [settingsExpanded, setSettingsExpanded] = useState(false);
 
   return (
-    <aside className="w-68 bg-[#252525] border-r border-[#3b3b3b] flex flex-col h-screen overflow-y-auto select-none font-sans shrink-0 text-[#f3f2f1]">
+    <aside className="w-68 bg-[#252525] border-r border-[#3b3b3b] flex flex-col h-full overflow-y-auto select-none font-sans shrink-0 text-[#f3f2f1]">
       {/* Header with 365 CRM Logo */}
       <div className="p-4 border-b border-[#3b3b3b] flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -148,7 +149,7 @@ export default function Sidebar({
             }`}
           >
             <div className="flex items-center gap-3">
-              <Ticket size={17} className={currentTab === 'support' ? 'text-white' : 'text-[#0078d4] animate-pulse'} />
+              <Ticket size={17} className={currentTab === 'support' ? 'text-white' : 'text-[#0078d4]'} />
               <span>Support Tickets</span>
             </div>
             {openTicketsCount > 0 && (
@@ -158,6 +159,39 @@ export default function Sidebar({
                 {openTicketsCount}
               </span>
             )}
+          </button>
+
+          {/* Helpdesk Shareable Link Configuration Tab */}
+          {isAgentMode && (
+            <button
+              onClick={() => setCurrentTab('helpdesk_setup')}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-sm text-sm font-semibold transition-all cursor-pointer ${
+                currentTab === 'helpdesk_setup'
+                  ? 'bg-gradient-to-r from-[#0078d4] to-indigo-600 text-white shadow-sm'
+                  : 'text-gray-300 hover:text-white hover:bg-[#3b3b3b]'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Sliders size={17} className={currentTab === 'helpdesk_setup' ? 'text-white' : 'text-[#ffb900]'} />
+                <span>Helpdesk Public Link</span>
+              </div>
+              <span className="text-[8px] bg-emerald-500/20 text-emerald-400 font-bold px-1 rounded-sm">LIVE</span>
+            </button>
+          )}
+
+          {/* SaaS Support Ticket Access */}
+          <button
+            onClick={() => setCurrentTab('saas_support')}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-sm text-sm font-semibold transition-all cursor-pointer ${
+              currentTab === 'saas_support'
+                ? 'bg-gradient-to-r from-purple-700 to-indigo-600 text-white shadow-sm'
+                : 'text-gray-300 hover:text-white hover:bg-[#3b3b3b]'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <LifeBuoy size={17} className={currentTab === 'saas_support' ? 'text-white' : 'text-purple-400'} />
+              <span>SaaS Support & Help</span>
+            </div>
           </button>
 
           {/* Other simulated CRM items matching image 2 */}

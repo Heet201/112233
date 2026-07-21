@@ -12,6 +12,8 @@ interface AgentPortalProps {
   onAddMessage: (ticketId: string, message: TicketMessage) => void;
   onLogout?: () => void;
   onAddCategory?: (newCategory: CategoryDetail) => void;
+  selectedTicketIdProp?: string | null;
+  onSelectTicketProp?: (id: string | null) => void;
 }
 
 export default function AgentPortal({
@@ -22,12 +24,16 @@ export default function AgentPortal({
   onAssignAgent,
   onAddMessage,
   onLogout,
-  onAddCategory
+  onAddCategory,
+  selectedTicketIdProp,
+  onSelectTicketProp
 }: AgentPortalProps) {
   // Navigation & filter states
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [subTab, setSubTab] = useState<'queue' | 'categories'>('queue');
+  const [subTab, setSubTab] = useState<'queue' | 'categories'>(() => {
+    return (localStorage.getItem('trueline_agent_subtab') as 'queue' | 'categories') || 'queue';
+  });
 
   // Category Form State
   const [newCatTitle, setNewCatTitle] = useState('');
@@ -40,7 +46,9 @@ export default function AgentPortal({
   const [catSuccess, setCatSuccess] = useState('');
   
   // Active Management Ticket State
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(() => {
+    return localStorage.getItem('trueline_agent_selected_ticket_id');
+  });
   const [agentReply, setAgentReply] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
 
@@ -137,8 +145,29 @@ export default function AgentPortal({
     }
   }, [activeTicket?.messages?.length]);
 
+  useEffect(() => {
+    localStorage.setItem('trueline_agent_subtab', subTab);
+  }, [subTab]);
+
+  useEffect(() => {
+    if (selectedTicketId) {
+      localStorage.setItem('trueline_agent_selected_ticket_id', selectedTicketId);
+    } else {
+      localStorage.removeItem('trueline_agent_selected_ticket_id');
+    }
+    if (onSelectTicketProp) {
+      onSelectTicketProp(selectedTicketId);
+    }
+  }, [selectedTicketId, onSelectTicketProp]);
+
+  useEffect(() => {
+    if (selectedTicketIdProp !== undefined && selectedTicketIdProp !== selectedTicketId) {
+      setSelectedTicketId(selectedTicketIdProp);
+    }
+  }, [selectedTicketIdProp]);
+
   return (
-    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#f3f2f1] font-sans text-[#323130]">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#f3f2f1] font-sans text-[#323130]">
       
       {/* Agent Top Header */}
       <div className="bg-white border-b border-[#edebe9] px-6 py-4 flex items-center justify-between shadow-sm shrink-0">

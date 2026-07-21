@@ -36,7 +36,7 @@ export default function AdminLogin({ onLoginSuccess, onCancel }: AdminLoginProps
   };
 
   return (
-    <div id="admin-login-screen" className="flex-1 flex items-center justify-center min-h-screen bg-[#f3f2f1] px-4 font-sans text-[#323130]">
+    <div id="admin-login-screen" className="flex-1 flex items-center justify-center h-full bg-[#f3f2f1] px-4 font-sans text-[#323130]">
       <motion.div 
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
