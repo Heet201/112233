@@ -25,9 +25,10 @@ export default function ShortUrlGeneratorModal({
   onClose,
   tenant
 }: ShortUrlGeneratorModalProps) {
-  const defaultTarget = tenant 
-    ? `${window.location.origin}/?tenant=${tenant.id}`
-    : window.location.href;
+  const baseLiveUrl = tenant?.customDomain 
+    ? (tenant.customDomain.includes('?') ? `${tenant.customDomain}&mode=public` : `${tenant.customDomain}?mode=public`)
+    : `https://ticketservice-20u9.onrender.com/?tenant=${tenant?.id || 'custom'}&mode=public`;
+  const defaultTarget = baseLiveUrl;
 
   const [targetUrl, setTargetUrl] = useState(defaultTarget);
   const [domain, setDomain] = useState('365crm.io/s/');

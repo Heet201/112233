@@ -119,20 +119,20 @@ export default function HelpdeskSetup({
 
               {/* 2. Link Variants Picker */}
               <div className="space-y-2 pt-2 border-t border-gray-100">
-                <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block">Available Public Link Formats:</span>
+                <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block">Available Public Link Formats (Strict Customer Mode):</span>
                 
                 <div className="space-y-2">
-                  {/* Option A: Custom Branded Domain */}
-                  <div className="p-2.5 bg-blue-50/60 border border-blue-200 rounded-sm flex items-center justify-between text-xs">
+                  {/* Option 1: Primary Live Render Deployment Link */}
+                  <div className="p-2.5 bg-blue-50/80 border border-blue-200 rounded-sm flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 overflow-hidden">
-                      <span className="p-1 bg-blue-600 text-white rounded-xs text-[10px] font-black uppercase">Branded</span>
+                      <span className="p-1 bg-[#0078d4] text-white rounded-xs text-[10px] font-black uppercase">Render Live</span>
                       <span className="font-mono font-bold text-blue-900 truncate">
-                        {tenant.customDomain || `https://support.${tenant.id}.com`}
+                        https://ticketservice-20u9.onrender.com/?tenant={tenant.id}&mode=public
                       </span>
                     </div>
                     <button
                       onClick={() => {
-                        const link = tenant.customDomain || `https://support.${tenant.id}.com`;
+                        const link = `https://ticketservice-20u9.onrender.com/?tenant=${tenant.id}&mode=public`;
                         navigator.clipboard.writeText(link);
                         setCopied(true);
                         setTimeout(() => setCopied(false), 2000);
@@ -140,21 +140,43 @@ export default function HelpdeskSetup({
                       className="text-[11px] font-bold text-[#0078d4] hover:underline flex items-center gap-1 shrink-0 cursor-pointer ml-2"
                     >
                       <Lucide.Copy size={12} />
-                      <span>Copy</span>
+                      <span>Copy Render Link</span>
                     </button>
                   </div>
 
-                  {/* Option B: Clean Shortened Vanity URL */}
-                  <div className="p-2.5 bg-emerald-50/60 border border-emerald-200 rounded-sm flex items-center justify-between text-xs">
+                  {/* Option 2: Render Deployment Alternative Link */}
+                  <div className="p-2.5 bg-purple-50/80 border border-purple-200 rounded-sm flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 overflow-hidden">
-                      <span className="p-1 bg-emerald-600 text-white rounded-xs text-[10px] font-black uppercase">Short URL</span>
-                      <span className="font-mono font-bold text-emerald-900 truncate">
-                        https://365crm.io/help/{tenant.id}
+                      <span className="p-1 bg-purple-600 text-white rounded-xs text-[10px] font-black uppercase">Render Service</span>
+                      <span className="font-mono font-bold text-purple-900 truncate">
+                        https://dep-d9g9fpsm0tmc73emhg00.onrender.com/?tenant={tenant.id}&mode=public
                       </span>
                     </div>
                     <button
                       onClick={() => {
-                        const link = `https://365crm.io/help/${tenant.id}`;
+                        const link = `https://dep-d9g9fpsm0tmc73emhg00.onrender.com/?tenant=${tenant.id}&mode=public`;
+                        navigator.clipboard.writeText(link);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="text-[11px] font-bold text-purple-700 hover:underline flex items-center gap-1 shrink-0 cursor-pointer ml-2"
+                    >
+                      <Lucide.Copy size={12} />
+                      <span>Copy Service Link</span>
+                    </button>
+                  </div>
+
+                  {/* Option 3: Custom Branded Domain */}
+                  <div className="p-2.5 bg-emerald-50/60 border border-emerald-200 rounded-sm flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="p-1 bg-emerald-600 text-white rounded-xs text-[10px] font-black uppercase">Branded</span>
+                      <span className="font-mono font-bold text-emerald-900 truncate">
+                        {tenant.customDomain || `https://support.${tenant.id}.com`}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const link = tenant.customDomain || `https://support.${tenant.id}.com`;
                         navigator.clipboard.writeText(link);
                         setCopied(true);
                         setTimeout(() => setCopied(false), 2000);
@@ -166,16 +188,21 @@ export default function HelpdeskSetup({
                     </button>
                   </div>
 
-                  {/* Option C: Live Dev / Sandbox Link */}
+                  {/* Option 4: Local Sandbox / Direct Link */}
                   <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-sm flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 overflow-hidden">
                       <span className="p-1 bg-gray-600 text-white rounded-xs text-[10px] font-black uppercase">Sandbox</span>
                       <span className="font-mono text-gray-600 truncate">
-                        {window.location.origin}/?tenant={tenant.id}
+                        {window.location.origin}/?tenant={tenant.id}&mode=public
                       </span>
                     </div>
                     <button
-                      onClick={handleCopyLink}
+                      onClick={() => {
+                        const link = `${window.location.origin}/?tenant=${tenant.id}&mode=public`;
+                        navigator.clipboard.writeText(link);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
                       className="text-[11px] font-bold text-gray-700 hover:underline flex items-center gap-1 shrink-0 cursor-pointer ml-2"
                     >
                       <Lucide.Copy size={12} />

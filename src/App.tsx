@@ -90,6 +90,15 @@ export default function App() {
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [isTopShortenerOpen, setIsTopShortenerOpen] = useState<boolean>(false);
 
+  // Pure Public Link state: when user opens a tenant public link, lock UI strictly to Customer Portal
+  const [isPurePublicMode, setIsPurePublicMode] = useState<boolean>(() => {
+    const search = window.location.search;
+    const params = new URLSearchParams(search);
+    const path = window.location.pathname;
+    const hash = window.location.hash;
+    return params.get('mode') === 'public' || params.get('public') === 'true' || Boolean(params.get('tenant')) || Boolean(params.get('id')) || path.includes('/helpdesk/') || hash.includes('helpdesk');
+  });
+
   // States for ticket tracking & real-time toast notifications
   const [activeAgentTicketId, setActiveAgentTicketId] = useState<string | null>(() => {
     return localStorage.getItem('trueline_agent_selected_ticket_id') || null;
@@ -241,6 +250,7 @@ export default function App() {
         }
 
         if (shouldShowClientPortal) {
+          setIsPurePublicMode(true);
           setCurrentRole('public_client');
           setIsAgentMode(false);
         }
@@ -608,109 +618,111 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#faf9f8] text-slate-800">
       
-      {/* 🎛️ SYSTEM CONTROLLER STRIP: Unified sandbox switcher with perfect aesthetics */}
-      <div className="bg-[#201f1e] text-white px-4 py-2.5 flex flex-col md:flex-row justify-between items-center gap-3 border-b border-[#3b3a39] shrink-0 z-50 text-xs font-sans">
-        <div className="flex items-center gap-2 font-mono">
-          <span className="px-2 py-0.5 bg-indigo-600 text-white font-extrabold text-[9px] rounded-xs uppercase tracking-wider">
-            365 CRM SaaS
-          </span>
-          <span className="font-bold text-gray-400">Sandbox Environment Controller:</span>
+      {/* 🎛️ SYSTEM CONTROLLER STRIP: Unified sandbox switcher (Hidden for direct public link visits) */}
+      {!isPurePublicMode && (
+        <div className="bg-[#201f1e] text-white px-4 py-2.5 flex flex-col md:flex-row justify-between items-center gap-3 border-b border-[#3b3a39] shrink-0 z-50 text-xs font-sans">
+          <div className="flex items-center gap-2 font-mono">
+            <span className="px-2 py-0.5 bg-indigo-600 text-white font-extrabold text-[9px] rounded-xs uppercase tracking-wider">
+              365 CRM SaaS
+            </span>
+            <span className="font-bold text-gray-400">Sandbox Environment Controller:</span>
+          </div>
+
+          {/* Roles Radio Panel */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={() => {
+                setCurrentRole('super_admin');
+                setIsAgentMode(true);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-xs transition-all cursor-pointer ${
+                currentRole === 'super_admin'
+                  ? 'bg-indigo-600 text-white shadow-sm font-black'
+                  : 'bg-[#323130] text-gray-300 hover:bg-[#3b3a39]'
+              }`}
+            >
+              <span>👑 SaaS Owner (Super Admin)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setCurrentRole('company_admin');
+                setIsAgentMode(true);
+                if (currentTab === 'helpdesk_setup') {
+                  // Keep it
+                } else {
+                  setCurrentTab('dashboard');
+                }
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-xs transition-all cursor-pointer ${
+                currentRole === 'company_admin'
+                  ? 'bg-[#0078d4] text-white shadow-sm font-black'
+                  : 'bg-[#323130] text-gray-300 hover:bg-[#3b3a39]'
+              }`}
+            >
+              <span>🏢 Subscriber (Company Admin)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setCurrentRole('public_client');
+                setIsAgentMode(false);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-xs transition-all cursor-pointer ${
+                currentRole === 'public_client'
+                  ? 'bg-emerald-600 text-white shadow-sm font-black'
+                  : 'bg-[#323130] text-gray-300 hover:bg-[#3b3a39]'
+              }`}
+            >
+              <span>🌐 Shared Helpdesk Link (Client View)</span>
+            </button>
+
+            <button
+              onClick={() => {
+                const domainLink = `https://ticketservice-20u9.onrender.com/?tenant=${currentTenantId}&mode=public`;
+                navigator.clipboard.writeText(domainLink).then(() => {
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2500);
+                });
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-xs transition-all cursor-pointer border ${
+                copiedLink
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                  : 'bg-indigo-950 text-indigo-300 border-indigo-800 hover:bg-indigo-900'
+              }`}
+              title="Copy Render Public Link for clients"
+            >
+              <span>{copiedLink ? `✓ Copied Render Public Link` : '📋 Copy Render Public Link'}</span>
+            </button>
+
+            <button
+              onClick={() => setIsTopShortenerOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-all cursor-pointer"
+              title="Generate Temporary Short URL with Expiration Timer"
+            >
+              <span>⚡ Temporary Short URL</span>
+            </button>
+          </div>
+
+          {/* Acting Tenant Switcher Dropdown */}
+          <div className="flex items-center gap-1.5 font-sans">
+            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Acting Tenant:</span>
+            <select
+              value={currentTenantId}
+              onChange={(e) => {
+                setCurrentTenantId(e.target.value);
+              }}
+              className="bg-[#292827] text-white font-bold border border-gray-700 rounded-sm px-2.5 py-1 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
+            >
+              {tenants.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.companyName} ({t.plan})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-
-        {/* Roles Radio Panel */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            onClick={() => {
-              setCurrentRole('super_admin');
-              setIsAgentMode(true);
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-xs transition-all cursor-pointer ${
-              currentRole === 'super_admin'
-                ? 'bg-indigo-600 text-white shadow-sm font-black'
-                : 'bg-[#323130] text-gray-300 hover:bg-[#3b3a39]'
-            }`}
-          >
-            <span>👑 SaaS Owner (Super Admin)</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setCurrentRole('company_admin');
-              setIsAgentMode(true);
-              if (currentTab === 'helpdesk_setup') {
-                // Keep it
-              } else {
-                setCurrentTab('dashboard');
-              }
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-xs transition-all cursor-pointer ${
-              currentRole === 'company_admin'
-                ? 'bg-[#0078d4] text-white shadow-sm font-black'
-                : 'bg-[#323130] text-gray-300 hover:bg-[#3b3a39]'
-            }`}
-          >
-            <span>🏢 Subscriber (Company Admin)</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setCurrentRole('public_client');
-              setIsAgentMode(false);
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-xs transition-all cursor-pointer ${
-              currentRole === 'public_client'
-                ? 'bg-emerald-600 text-white shadow-sm font-black'
-                : 'bg-[#323130] text-gray-300 hover:bg-[#3b3a39]'
-            }`}
-          >
-            <span>🌐 Shared Helpdesk Link (Client View)</span>
-          </button>
-
-          <button
-            onClick={() => {
-              const domainLink = currentTenant.customDomain || `https://support.${currentTenantId}.com`;
-              navigator.clipboard.writeText(domainLink).then(() => {
-                setCopiedLink(true);
-                setTimeout(() => setCopiedLink(false), 2500);
-              });
-            }}
-            className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-xs transition-all cursor-pointer border ${
-              copiedLink
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                : 'bg-indigo-950 text-indigo-300 border-indigo-800 hover:bg-indigo-900'
-            }`}
-            title="Copy Branded Custom Link for clients"
-          >
-            <span>{copiedLink ? `✓ Copied Custom Link (${currentTenant.customDomain || `support.${currentTenantId}.com`})` : '📋 Copy Branded Custom Link'}</span>
-          </button>
-
-          <button
-            onClick={() => setIsTopShortenerOpen(true)}
-            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-all cursor-pointer"
-            title="Generate Temporary Short URL with Expiration Timer"
-          >
-            <span>⚡ Temporary Short URL</span>
-          </button>
-        </div>
-
-        {/* Acting Tenant Switcher Dropdown */}
-        <div className="flex items-center gap-1.5 font-sans">
-          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Acting Tenant:</span>
-          <select
-            value={currentTenantId}
-            onChange={(e) => {
-              setCurrentTenantId(e.target.value);
-            }}
-            className="bg-[#292827] text-white font-bold border border-gray-700 rounded-sm px-2.5 py-1 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
-          >
-            {tenants.map(t => (
-              <option key={t.id} value={t.id}>
-                {t.companyName} ({t.plan})
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      )}
 
       {/* RENDER BODY BASED ON CURRENT SIMULATED SaaS ROLE */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative">
@@ -726,7 +738,7 @@ export default function App() {
             onReopenTicket={handleReopenTicket}
             activeTenant={currentTenant}
             standalone={true}
-            onBackToCRM={() => setCurrentRole('company_admin')}
+            onBackToCRM={isPurePublicMode ? undefined : () => setCurrentRole('company_admin')}
           />
         ) : (
           /* OTHERWISE RENDER CRM WORKSPACE GRID (SIDEBAR + MAIN COMPONENT) */

@@ -138,7 +138,7 @@ export const INITIAL_TENANTS: Tenant[] = [
     supportEmail: 'support@truelinesolution.com',
     enableAttachments: true,
     logoText: 'TL',
-    customDomain: 'https://support.truelinesolution.com'
+    customDomain: 'https://ticketservice-20u9.onrender.com/?tenant=custom'
   },
   {
     id: 'tesla',
@@ -155,7 +155,7 @@ export const INITIAL_TENANTS: Tenant[] = [
     supportEmail: 'service@tesla.com',
     enableAttachments: true,
     logoText: 'TSLA',
-    customDomain: 'https://help.teslaindia.com'
+    customDomain: 'https://ticketservice-20u9.onrender.com/?tenant=tesla'
   },
   {
     id: 'acme',
@@ -172,7 +172,7 @@ export const INITIAL_TENANTS: Tenant[] = [
     supportEmail: 'orders@acme.com',
     enableAttachments: false,
     logoText: 'ACME',
-    customDomain: 'https://support.acme.com'
+    customDomain: 'https://ticketservice-20u9.onrender.com/?tenant=acme'
   }
 ];
 
