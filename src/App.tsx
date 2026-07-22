@@ -681,6 +681,7 @@ export default function App() {
                     onCreateSaaSTicket={handleCreateTicket}
                     tenant={tenants[0]}
                     initialInboxSource="saas"
+                    isSuperAdmin={true}
                   />
                 ) : (
                   <SuperAdminPortal

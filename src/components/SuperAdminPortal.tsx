@@ -133,6 +133,7 @@ export default function SuperAdminPortal({
         onCreateSaaSTicket={onCreateSaaSTicket}
         tenant={tenants[0]}
         initialInboxSource="saas"
+        isSuperAdmin={true}
       />
     );
   }

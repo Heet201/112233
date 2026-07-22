@@ -17,6 +17,7 @@ interface AgentPortalProps {
   onCreateSaaSTicket?: (newTicket: Ticket) => void;
   tenant?: Tenant;
   initialInboxSource?: 'customer' | 'saas';
+  isSuperAdmin?: boolean;
 }
 
 interface HelpCategory {
@@ -112,7 +113,8 @@ export default function AgentPortal({
   onSelectTicketProp,
   onCreateSaaSTicket,
   tenant,
-  initialInboxSource = 'customer'
+  initialInboxSource = 'customer',
+  isSuperAdmin = false
 }: AgentPortalProps) {
   // Navigation & filter states
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -214,13 +216,26 @@ export default function AgentPortal({
 
     const isSaaSTicket = activeTicket?.raisedToSaaS;
 
+    // Sender role:
+    // If isSuperAdmin is true: SaaS Super Admin responding -> sender is 'agent'
+    // If isSuperAdmin is false:
+    //   If SaaS ticket (raisedToSaaS) -> Subscriber responding -> sender is 'customer'
+    //   If standard client ticket -> Tenant Agent responding -> sender is 'agent'
+    const senderRole: 'agent' | 'customer' = isSuperAdmin
+      ? 'agent'
+      : (isSaaSTicket ? 'customer' : 'agent');
+
+    const senderDisplayName = isSuperAdmin
+      ? 'SaaS Super Admin (365 CRM)'
+      : (isSaaSTicket 
+          ? `${tenant?.ownerName || 'Company Admin'} (${tenant?.companyName || 'Subscriber'})`
+          : 'Heet Dhameliya (CRM Lead)');
+
     // Send the reply
     const reply: TicketMessage = {
-      id: `msg-${isSaaSTicket ? 'cust' : 'agent'}-${Date.now()}`,
-      sender: isSaaSTicket ? 'customer' : 'agent',
-      senderName: isSaaSTicket 
-        ? `${tenant?.ownerName || 'Company Admin'} (${tenant?.companyName || 'Subscriber'})`
-        : 'Heet Dhameliya (CRM Lead)', 
+      id: `msg-${senderRole}-${Date.now()}`,
+      sender: senderRole,
+      senderName: senderDisplayName,
       message: agentReply.trim(),
       createdAt: new Date().toISOString()
     };
@@ -229,8 +244,7 @@ export default function AgentPortal({
     setAgentReply('');
     setSelectedTemplate('');
 
-    // Auto update status to In Progress if it was open (only for customer-facing tickets)
-    if (!isSaaSTicket && activeTicket && activeTicket.status === 'open') {
+    if (activeTicket && activeTicket.status === 'open') {
       onUpdateStatus(selectedTicketId, 'in_progress');
     }
   };
@@ -394,317 +408,106 @@ export default function AgentPortal({
         {!selectedTicketId ? (
           subTab === 'queue' ? (
             <div className="p-6 space-y-6 max-w-7xl mx-auto">
-            
-            {/* KPI Telemetry Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div className="bg-white p-4 rounded-sm border border-[#edebe9] border-l-4 border-l-[#0078d4] shadow-sm space-y-1.5">
-                <div className="flex items-center justify-between text-[#605e5c]">
-                  <span className="text-[10px] uppercase font-bold tracking-wider">Total Filed Tickets</span>
-                  <Lucide.Ticket size={16} className="text-[#0078d4]" />
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-[#323130]">{totalTickets}</span>
-                  <span className="text-[10px] text-[#107c10] font-semibold">100% Volume</span>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-sm border border-[#edebe9] border-l-4 border-l-[#d13438] shadow-sm space-y-1.5">
-                <div className="flex items-center justify-between text-[#605e5c]">
-                  <span className="text-[10px] uppercase font-bold tracking-wider">Awaiting (Open)</span>
-                  <Lucide.AlertCircle size={16} className="text-[#d13438]" />
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-[#d13438] animate-pulse">{openTickets}</span>
-                  <span className="text-[10px] text-[#605e5c] font-medium">{totalTickets ? Math.round((openTickets / totalTickets) * 100) : 0}% of total</span>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-sm border border-[#edebe9] border-l-4 border-l-[#ffb900] shadow-sm space-y-1.5">
-                <div className="flex items-center justify-between text-[#605e5c]">
-                  <span className="text-[10px] uppercase font-bold tracking-wider">In Investigation</span>
-                  <Lucide.LoaderCircle size={16} className="text-[#ffb900] animate-spin" />
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-[#ffb900] font-sans">{inProgressTickets}</span>
-                  <span className="text-[10px] text-[#ffb900] font-medium">Active CRM</span>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-sm border border-[#edebe9] border-l-4 border-l-[#107c10] shadow-sm space-y-1.5">
-                <div className="flex items-center justify-between text-[#605e5c]">
-                  <span className="text-[10px] uppercase font-bold tracking-wider">Resolved Tickets</span>
-                  <Lucide.CheckCircle size={16} className="text-[#107c10]" />
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-[#107c10]">{resolvedTickets}</span>
-                  <span className="text-[10px] text-[#107c10] font-bold">Resolved Logs</span>
-                </div>
-              </div>
-
-              <div className="bg-white p-4 rounded-sm border border-[#edebe9] border-l-4 border-l-[#ffb900] shadow-sm space-y-1.5">
-                <div className="flex items-center justify-between text-[#605e5c]">
-                  <span className="text-[10px] uppercase font-bold tracking-wider">CSAT Rating</span>
-                  <div className="flex items-center text-[#ffb900] gap-0.5">
-                    <Lucide.Star size={12} fill="#ffb900" className="text-[#ffb900]" />
-                    <span className="text-[10px] font-bold text-[#ffb900]">{averageRating}</span>
-                  </div>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-[#ffb900]">{averageRating} <span className="text-xs text-[#605e5c]">/ 5</span></span>
-                  <span className="text-[10px] text-[#107c10] font-semibold">Excellent</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Custom SVG Data Visualizations */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Category distribution bar chart */}
-              <div className="bg-white p-5 rounded-sm border border-[#edebe9] shadow-sm lg:col-span-2 space-y-4">
-                <div>
-                  <h3 className="font-bold text-[#323130] text-sm">Ticket Volume Category Distribution</h3>
-                  <p className="text-xs text-[#605e5c]">Real-time counts of issues per CRM system module</p>
-                </div>
-                
-                <div className="space-y-3.5">
-                  {categories.map((cat) => {
-                    const count = tickets.filter(t => t.category === cat.id).length;
-                    const pct = totalTickets > 0 ? (count / totalTickets) * 100 : 0;
-                    return (
-                      <div key={cat.id} className="space-y-1 text-xs">
-                        <div className="flex items-center justify-between font-semibold">
-                          <span className="text-[#605e5c] flex items-center gap-1.5">
-                            {cat.title === 'General Support & Others' ? 'General Support' : cat.title}
-                          </span>
-                          <span className="text-[#323130]">{count} Tickets <span className="text-[10px] text-[#605e5c] font-normal">({Math.round(pct)}%)</span></span>
-                        </div>
-                        {/* Custom horizontal bar */}
-                        <div className="w-full bg-[#f3f2f1] h-2.5 rounded-sm overflow-hidden border border-[#edebe9]">
-                          <div 
-                            className="bg-[#0078d4] h-full rounded-sm transition-all duration-500" 
-                            style={{ width: `${pct || 2}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Status Breakdown Segment Ring */}
-              <div className="bg-white p-5 rounded-sm border border-[#edebe9] shadow-sm space-y-4">
-                <div>
-                  <h3 className="font-bold text-[#323130] text-sm">Real-time Resolution Slicing</h3>
-                  <p className="text-xs text-[#605e5c]">SLA performance status tracking</p>
-                </div>
-
-                <div className="flex flex-col items-center justify-center py-4 relative">
-                  {/* Outer SVG Segment Wheel */}
-                  <svg className="w-32 h-32" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f3f2f1" strokeWidth="3" />
-                    
-                    {/* Resolved Arc (green) */}
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#107c10" strokeWidth="3" 
-                      strokeDasharray={`${totalTickets ? (resolvedTickets / totalTickets) * 100 : 0} ${totalTickets ? 100 - (resolvedTickets / totalTickets) * 100 : 100}`}
-                      strokeDashoffset="25" 
-                    />
-                    
-                    {/* Open/Awaiting Arc (pink) */}
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#d13438" strokeWidth="3" 
-                      strokeDasharray={`${totalTickets ? (openTickets / totalTickets) * 100 : 0} ${totalTickets ? 100 - (openTickets / totalTickets) * 100 : 100}`}
-                      strokeDashoffset={`${25 - (totalTickets ? (resolvedTickets / totalTickets) * 100 : 0)}`} 
-                    />
-
-                    {/* In Progress Arc (amber) */}
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#ffb900" strokeWidth="3" 
-                      strokeDasharray={`${totalTickets ? (inProgressTickets / totalTickets) * 100 : 0} ${totalTickets ? 100 - (inProgressTickets / totalTickets) * 100 : 100}`}
-                      strokeDashoffset={`${25 - (totalTickets ? ((resolvedTickets + openTickets) / totalTickets) * 100 : 0)}`} 
-                    />
-                  </svg>
-                  
-                  {/* Centered label */}
-                  <div className="absolute text-center leading-none">
-                    <span className="text-xl font-black text-[#323130] block">{slaMetPercentage}%</span>
-                    <span className="text-[8px] font-bold text-[#605e5c] uppercase tracking-widest block">SLA MET</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-[11px] pt-2">
-                  <div className="flex items-center gap-1.5 font-semibold text-[#605e5c]">
-                    <span className="w-2 h-2 rounded-sm bg-[#107c10] block"></span>
-                    <span>Resolved ({resolvedTickets})</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 font-semibold text-[#605e5c]">
-                    <span className="w-2 h-2 rounded-sm bg-[#d13438] block"></span>
-                    <span>Awaiting ({openTickets})</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 font-semibold text-[#605e5c]">
-                    <span className="w-2 h-2 rounded-sm bg-[#ffb900] block"></span>
-                    <span>Working ({inProgressTickets})</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 font-semibold text-[#605e5c]">
-                    <span className="w-2 h-2 rounded-sm bg-[#0078d4] block"></span>
-                    <span>Pending ({pendingTickets})</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Ticket Management Workspace Grid / Table */}
-            <div className="bg-white rounded-sm border border-[#edebe9] shadow-sm overflow-hidden">
-              {/* Filter controls bar */}
-              <div className="p-4 bg-[#f8f8f8] border-b border-[#edebe9] flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-3 flex-wrap">
-                  {/* Support Stream Toggle */}
-                  <div className="flex items-center p-0.5 bg-slate-200 rounded-sm border border-slate-300">
-                    <button
-                      onClick={() => {
-                        setInboxSource('customer');
-                        setStatusFilter('all');
-                        setIsRaisingSaaS(false);
-                      }}
-                      className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-                        inboxSource === 'customer'
-                          ? 'bg-[#0078d4] text-white shadow-xs'
-                          : 'text-[#605e5c] hover:text-[#323130]'
-                      }`}
-                    >
-                      <Lucide.Users size={12} />
-                      <span>My Clients Queue</span>
-                      <span className={`px-1.5 py-0.5 rounded-sm text-[8px] leading-none ${inboxSource === 'customer' ? 'bg-[#106ebe] text-white font-extrabold' : 'bg-slate-300 text-[#323130]'}`}>
-                        {tickets.filter(t => !t.raisedToSaaS).length}
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setInboxSource('saas');
-                        setStatusFilter('all');
-                      }}
-                      className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-                        inboxSource === 'saas'
-                          ? 'bg-purple-700 text-white shadow-xs'
-                          : 'text-[#605e5c] hover:text-[#323130]'
-                      }`}
-                    >
-                      <Lucide.LifeBuoy size={12} />
-                      <span>SaaS Support Logs</span>
-                      <span className={`px-1.5 py-0.5 rounded-sm text-[8px] leading-none ${inboxSource === 'saas' ? 'bg-purple-800 text-white font-extrabold' : 'bg-slate-300 text-[#323130]'}`}>
-                        {tickets.filter(t => t.raisedToSaaS).length}
-                      </span>
-                    </button>
-                  </div>
-
-                  {/* Search */}
-                  <div className="relative w-64">
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search Ticket ID, Name, Keyword..."
-                      className="w-full bg-white border border-[#edebe9] rounded-sm pl-9 pr-3 py-1.5 text-xs text-[#323130] focus:outline-none focus:ring-1 focus:ring-[#0078d4] focus:border-[#0078d4]"
-                    />
-                    <Lucide.Search className="absolute left-3 top-2.5 text-[#605e5c]" size={13} />
-                  </div>
-
-                  {/* Status Dropdown */}
-                  <div>
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="bg-white border border-[#edebe9] rounded-sm px-2.5 py-1.5 text-xs font-semibold text-[#605e5c] focus:outline-none focus:ring-1 focus:ring-[#0078d4] cursor-pointer"
-                    >
-                      <option value="all">Status: All</option>
-                      <option value="open">Status: Open / Awaiting</option>
-                      <option value="in_progress">Status: In Progress</option>
-                      <option value="pending">Status: Pending Agent</option>
-                      <option value="resolved">Status: Resolved</option>
-                      <option value="closed">Status: Closed</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  {inboxSource === 'saas' && !isRaisingSaaS && (
-                    <button
-                      onClick={() => setIsRaisingSaaS(true)}
-                      className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-3 py-1.5 rounded-sm shadow-sm flex items-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <Lucide.Plus size={13} />
-                      <span>Raise Support Ticket to SaaS</span>
-                    </button>
-                  )}
-                  <div className="text-xs text-[#323130] font-semibold">
-                    Showing <strong className="text-[#d13438]">{filteredTickets.length}</strong> of {tickets.filter(t => inboxSource === 'saas' ? t.raisedToSaaS : !t.raisedToSaaS).length} tickets
-                  </div>
-                </div>
-              </div>
-
               {saasFormSuccess && (
-                <div className="p-3 bg-emerald-50 border-b border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-1.5">
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-sm flex items-center gap-1.5 shadow-xs">
                   <Lucide.CheckCircle size={14} className="text-emerald-600 shrink-0" />
                   <span>{saasFormSuccess}</span>
                 </div>
               )}
 
               {isRaisingSaaS ? (
-                /* RAISE TICKET FLOW INSIDE AGENT PORTAL */
+                /* FULL PAGE RAISE TICKET VIEW */
                 !selectedSaaSCategory ? (
-                  /* Step 1: Category Picker */
-                  <div className="p-6 bg-slate-50">
-                    <div className="mb-6 flex justify-between items-center">
+                  /* STEP 1: SELECT HELP CATEGORY (Matches Screenshot 2!) */
+                  <div className="space-y-5">
+                    <div className="flex items-center justify-between pb-3 border-b border-[#edebe9]">
                       <div>
-                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                          <Lucide.LifeBuoy className="text-purple-700" size={16} />
-                          Select SaaS Support Category
-                        </h3>
-                        <p className="text-xs text-gray-500 mt-0.5">Choose a help desk domain to route your technical query to the Super Admin squad.</p>
+                        <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest block">
+                          SELECT HELP CATEGORY
+                        </h2>
+                        <p className="text-xs text-gray-500 mt-0.5">Select a category below to route your support ticket to the SaaS Super Admin squad.</p>
                       </div>
                       <button
-                        onClick={() => setIsRaisingSaaS(false)}
-                        className="text-xs text-[#605e5c] hover:text-[#323130] font-semibold flex items-center gap-1 cursor-pointer"
+                        onClick={() => {
+                          setIsRaisingSaaS(false);
+                          setSelectedSaaSCategory(null);
+                        }}
+                        className="bg-white border border-[#edebe9] hover:bg-slate-100 text-[#323130] font-bold text-xs px-3 py-1.5 rounded-sm shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
                       >
-                        <Lucide.X size={14} />
-                        Cancel
+                        <Lucide.ArrowLeft size={13} />
+                        <span>Back to Support Logs</span>
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                       {SAAS_CATEGORIES.map((cat) => {
                         const IconComp = (Lucide as any)[cat.iconName] || Lucide.HelpCircle;
                         return (
-                          <button
+                          <div
                             key={cat.id}
-                            onClick={() => {
-                              setSelectedSaaSCategory(cat);
-                              setSelectedSaaSSubCategory(cat.subCategories[0]);
-                            }}
-                            className="bg-white border border-[#edebe9] p-5 rounded-sm shadow-xs text-left hover:border-purple-600 hover:shadow-md transition-all group cursor-pointer"
+                            className="bg-white border border-[#edebe9] rounded-sm shadow-xs overflow-hidden flex flex-col justify-between hover:border-[#0078d4] hover:shadow-sm transition-all"
                           >
-                            <div className="w-9 h-9 rounded-sm bg-purple-50 text-purple-700 flex items-center justify-center border border-purple-100 mb-3 group-hover:bg-purple-100">
-                              <IconComp size={18} />
+                            <div className="p-5 space-y-3">
+                              {/* Category Header */}
+                              <div className="flex items-center gap-3 border-b border-[#f3f2f1] pb-3">
+                                <div className="w-8 h-8 rounded-full bg-blue-50 text-[#0078d4] flex items-center justify-center shrink-0 border border-blue-100">
+                                  <IconComp size={16} />
+                                </div>
+                                <h3 className="font-bold text-[#323130] text-sm leading-snug">{cat.title}</h3>
+                              </div>
+
+                              {/* Subcategories list */}
+                              <div className="space-y-1 pt-1">
+                                {cat.subCategories.map((subItem) => (
+                                  <button
+                                    key={subItem}
+                                    onClick={() => {
+                                      setSelectedSaaSCategory(cat);
+                                      setSelectedSaaSSubCategory(subItem);
+                                    }}
+                                    className="w-full text-left py-2 px-2.5 rounded-xs hover:bg-slate-50 flex items-center justify-between group cursor-pointer transition-colors border-b border-dashed border-[#f3f2f1] last:border-0"
+                                  >
+                                    <span className="text-xs text-[#605e5c] group-hover:text-[#0078d4] font-medium line-clamp-1">
+                                      {subItem}
+                                    </span>
+                                    <Lucide.ChevronRight size={13} className="text-gray-300 group-hover:text-[#0078d4] shrink-0" />
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                            <h4 className="font-bold text-[#323130] text-xs mb-1 group-hover:text-purple-700">{cat.title}</h4>
-                            <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{cat.subCategories.join(', ')}</p>
-                          </button>
+
+                            {/* Bottom View All Link */}
+                            <button
+                              onClick={() => {
+                                setSelectedSaaSCategory(cat);
+                                setSelectedSaaSSubCategory(cat.subCategories[0]);
+                              }}
+                              className="w-full py-3 px-5 border-t border-[#f3f2f1] text-[10px] font-extrabold text-[#0078d4] hover:bg-blue-50/50 uppercase tracking-wider flex items-center justify-between group transition-colors cursor-pointer bg-[#fafafa]"
+                            >
+                              <span>VIEW ALL UNDER {cat.title.toUpperCase()}</span>
+                              <Lucide.ChevronRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
                   </div>
                 ) : (
-                  /* Step 2: Explanation Form */
-                  <form onSubmit={handleSubmitSaaSTicket} className="p-6 bg-white space-y-4">
-                    <div className="flex items-center justify-between border-b border-[#edebe9] pb-3">
-                      <div className="flex items-center gap-2.5">
+                  /* STEP 2: TICKET FORM */
+                  <div className="bg-white border border-[#edebe9] rounded-sm shadow-sm max-w-3xl mx-auto overflow-hidden">
+                    <div className="p-5 border-b border-[#edebe9] bg-[#f8f8f8] flex items-center justify-between">
+                      <div className="flex items-center gap-3">
                         <button
                           type="button"
                           onClick={() => setSelectedSaaSCategory(null)}
-                          className="p-1 hover:bg-[#f3f2f1] rounded-sm text-purple-700 cursor-pointer"
+                          className="p-1.5 hover:bg-slate-200 rounded-sm text-[#0078d4] cursor-pointer transition-colors"
+                          title="Back to Categories"
                         >
-                          <Lucide.ChevronLeft size={16} />
+                          <Lucide.ChevronLeft size={18} />
                         </button>
                         <div>
-                          <h3 className="text-xs font-bold text-slate-800">
-                            Raising in: <span className="text-purple-700">{selectedSaaSCategory.title}</span>
-                          </h3>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Selected Help Category</span>
+                          <h3 className="text-sm font-bold text-slate-800">{selectedSaaSCategory.title}</h3>
                         </div>
                       </div>
                       <button
@@ -713,182 +516,429 @@ export default function AgentPortal({
                           setIsRaisingSaaS(false);
                           setSelectedSaaSCategory(null);
                         }}
-                        className="text-xs text-[#605e5c] hover:text-[#323130] font-semibold flex items-center gap-1 cursor-pointer"
+                        className="text-xs font-bold text-[#605e5c] hover:text-[#323130] flex items-center gap-1 cursor-pointer"
                       >
-                        <Lucide.X size={14} />
-                        Cancel
+                        <Lucide.X size={15} />
+                        <span>Cancel</span>
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase">Issue Severity</label>
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {(['low', 'medium', 'high'] as const).map((p) => (
-                            <button
-                              type="button"
-                              key={p}
-                              onClick={() => setSaasPriority(p)}
-                              className={`py-1.5 text-[10px] uppercase font-bold border rounded-sm transition-colors cursor-pointer ${
-                                saasPriority === p
-                                  ? 'bg-purple-700 text-white border-purple-700'
-                                  : 'bg-white text-slate-600 border-[#edebe9] hover:bg-slate-50'
-                              }`}
-                            >
-                              {p}
-                            </button>
-                          ))}
+                    <form onSubmit={handleSubmitSaaSTicket} className="p-6 space-y-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider">Issue Severity</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {(['low', 'medium', 'high'] as const).map((p) => (
+                              <button
+                                type="button"
+                                key={p}
+                                onClick={() => setSaasPriority(p)}
+                                className={`py-2 text-[10px] uppercase font-bold border rounded-sm transition-all cursor-pointer ${
+                                  saasPriority === p
+                                    ? 'bg-[#0078d4] text-white border-[#0078d4] shadow-xs'
+                                    : 'bg-white text-slate-600 border-[#edebe9] hover:bg-slate-50'
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider">Routing Classification</label>
+                          <select
+                            value={selectedSaaSSubCategory}
+                            onChange={(e) => setSelectedSaaSSubCategory(e.target.value)}
+                            className="w-full text-xs p-2 border border-slate-300 rounded-sm focus:outline-none focus:border-[#0078d4] bg-white font-medium cursor-pointer"
+                          >
+                            {selectedSaaSCategory.subCategories.map((sub: string) => (
+                              <option key={sub} value={sub}>{sub}</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
 
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-bold text-slate-600 uppercase">Routing Classification</label>
-                        <select
-                          value={selectedSaaSSubCategory}
-                          onChange={(e) => setSelectedSaaSSubCategory(e.target.value)}
-                          className="w-full text-xs p-1.5 border border-gray-300 rounded-sm focus:outline-none focus:border-purple-700 bg-white"
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider">Brief Subject Summary *</label>
+                        <input
+                          type="text"
+                          required
+                          value={saasSubject}
+                          onChange={(e) => setSaasSubject(e.target.value)}
+                          placeholder="e.g., Unable to sync WhatsApp Business API gateway..."
+                          className="w-full text-xs p-2.5 border border-slate-300 rounded-sm focus:outline-none focus:border-[#0078d4] bg-white font-medium"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="block text-[10px] font-black text-slate-600 uppercase tracking-wider">Detailed Explanation *</label>
+                        <textarea
+                          required
+                          value={saasDescription}
+                          onChange={(e) => setSaasDescription(e.target.value)}
+                          placeholder="Provide complete details for SaaS engineering support..."
+                          rows={5}
+                          className="w-full text-xs p-3 border border-slate-300 rounded-sm focus:outline-none focus:border-[#0078d4] bg-white font-sans"
+                        />
+                      </div>
+
+                      <div className="pt-4 border-t border-[#edebe9] flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSaaSCategory(null);
+                            setIsRaisingSaaS(false);
+                          }}
+                          className="text-xs font-bold text-slate-500 hover:text-slate-700 px-4 py-2 cursor-pointer"
                         >
-                          {selectedSaaSCategory.subCategories.map((sub: string) => (
-                            <option key={sub} value={sub}>{sub}</option>
-                          ))}
-                        </select>
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-5 py-2.5 rounded-sm shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Lucide.Send size={13} />
+                          <span>Raise Support Ticket to SaaS</span>
+                        </button>
                       </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase">Brief Subject Summary *</label>
-                      <input
-                        type="text"
-                        required
-                        value={saasSubject}
-                        onChange={(e) => setSaasSubject(e.target.value)}
-                        placeholder="e.g., Unable to sync WhatsApp Business API gateway..."
-                        className="w-full text-xs p-2 border border-gray-300 rounded-sm focus:outline-none focus:border-purple-700 bg-white"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[10px] font-bold text-slate-600 uppercase">Detailed Explanation *</label>
-                      <textarea
-                        required
-                        value={saasDescription}
-                        onChange={(e) => setSaasDescription(e.target.value)}
-                        placeholder="Provide details for SaaS engineering support..."
-                        rows={4}
-                        className="w-full text-xs p-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-purple-700 bg-white font-sans"
-                      />
-                    </div>
-
-                    <div className="pt-3 border-t border-[#edebe9] flex justify-end gap-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedSaaSCategory(null);
-                          setIsRaisingSaaS(false);
-                        }}
-                        className="text-xs font-bold text-slate-500 hover:text-slate-700 px-3 py-2 cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-4 py-2 rounded-sm shadow-xs cursor-pointer"
-                      >
-                        Raise Ticket to SaaS
-                      </button>
-                    </div>
-                  </form>
+                    </form>
+                  </div>
                 )
               ) : (
-                /* OTHERWISE RENDER THE STANDARD DATA TABLE */
-                <div className="overflow-x-auto">
-                  {filteredTickets.length === 0 ? (
-                    <div className="p-12 text-center text-gray-400 space-y-3">
-                      <Lucide.ShieldAlert size={40} className="mx-auto text-slate-300" />
-                      <div>
-                        <h4 className="font-bold text-slate-700 text-xs">No active tickets found</h4>
-                        <p className="text-[11px] max-w-sm mx-auto mt-1">There are no tickets in this stream folder matching your filters or keywords.</p>
+                /* KPI Telemetry Cards */
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div className="bg-white p-4 rounded-sm border border-[#edebe9] border-l-4 border-l-[#0078d4] shadow-sm space-y-1.5">
+                      <div className="flex items-center justify-between text-[#605e5c]">
+                        <span className="text-[10px] uppercase font-bold tracking-wider">Total Filed Tickets</span>
+                        <Lucide.Ticket size={16} className="text-[#0078d4]" />
                       </div>
-                      {inboxSource === 'saas' && (
-                        <button
-                          onClick={() => setIsRaisingSaaS(true)}
-                          className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-4 py-2 rounded-sm shadow-sm transition-colors cursor-pointer mt-2"
-                        >
-                          Raise Support Ticket to SaaS
-                        </button>
-                      )}
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-[#323130]">{totalTickets}</span>
+                        <span className="text-[10px] text-[#107c10] font-semibold">100% Volume</span>
+                      </div>
                     </div>
-                  ) : (
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-[#f8f8f8] text-[10px] font-bold text-[#605e5c] uppercase tracking-wider border-b border-[#edebe9]">
-                          <th className="p-4 w-28 pl-4">Ticket ID</th>
-                          <th className="p-4">Customer/Sender</th>
-                          <th className="p-4">Reported Issue Details</th>
-                          <th className="p-4">Assigned To</th>
-                          <th className="p-4">Status</th>
-                          <th className="p-4 pr-4 text-center">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#f3f2f1]">
-                        {filteredTickets.map((tkt) => {
-                          const assignedAgent = MOCK_AGENTS.find(a => a.id === tkt.assignedAgentId);
+
+                    <div className="bg-white p-4 rounded-sm border border-[#edebe9] border-l-4 border-l-[#d13438] shadow-sm space-y-1.5">
+                      <div className="flex items-center justify-between text-[#605e5c]">
+                        <span className="text-[10px] uppercase font-bold tracking-wider">Awaiting (Open)</span>
+                        <Lucide.AlertCircle size={16} className="text-[#d13438]" />
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-[#d13438] animate-pulse">{openTickets}</span>
+                        <span className="text-[10px] text-[#605e5c] font-medium">{totalTickets ? Math.round((openTickets / totalTickets) * 100) : 0}% of total</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-sm border border-[#edebe9] border-l-4 border-l-[#ffb900] shadow-sm space-y-1.5">
+                      <div className="flex items-center justify-between text-[#605e5c]">
+                        <span className="text-[10px] uppercase font-bold tracking-wider">In Investigation</span>
+                        <Lucide.LoaderCircle size={16} className="text-[#ffb900] animate-spin" />
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-[#ffb900] font-sans">{inProgressTickets}</span>
+                        <span className="text-[10px] text-[#ffb900] font-medium">Active CRM</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-sm border border-[#edebe9] border-l-4 border-l-[#107c10] shadow-sm space-y-1.5">
+                      <div className="flex items-center justify-between text-[#605e5c]">
+                        <span className="text-[10px] uppercase font-bold tracking-wider">Resolved Tickets</span>
+                        <Lucide.CheckCircle size={16} className="text-[#107c10]" />
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-[#107c10]">{resolvedTickets}</span>
+                        <span className="text-[10px] text-[#107c10] font-bold">Resolved Logs</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-sm border border-[#edebe9] border-l-4 border-l-[#ffb900] shadow-sm space-y-1.5">
+                      <div className="flex items-center justify-between text-[#605e5c]">
+                        <span className="text-[10px] uppercase font-bold tracking-wider">CSAT Rating</span>
+                        <div className="flex items-center text-[#ffb900] gap-0.5">
+                          <Lucide.Star size={12} fill="#ffb900" className="text-[#ffb900]" />
+                          <span className="text-[10px] font-bold text-[#ffb900]">{averageRating}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-black text-[#ffb900]">{averageRating} <span className="text-xs text-[#605e5c]">/ 5</span></span>
+                        <span className="text-[10px] text-[#107c10] font-semibold">Excellent</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Custom SVG Data Visualizations */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Category distribution bar chart */}
+                    <div className="bg-white p-5 rounded-sm border border-[#edebe9] shadow-sm lg:col-span-2 space-y-4">
+                      <div>
+                        <h3 className="font-bold text-[#323130] text-sm">Ticket Volume Category Distribution</h3>
+                        <p className="text-xs text-[#605e5c]">Real-time counts of issues per CRM system module</p>
+                      </div>
+                      
+                      <div className="space-y-3.5">
+                        {categories.map((cat) => {
+                          const count = tickets.filter(t => t.category === cat.id).length;
+                          const pct = totalTickets > 0 ? (count / totalTickets) * 100 : 0;
                           return (
-                            <tr key={tkt.id} className="hover:bg-[#f9f9f9] transition-colors">
-                              <td className="p-4 font-mono font-bold text-[#0078d4] pl-4">{tkt.id}</td>
-                              <td className="p-4">
-                                <div>
-                                  <p className="font-bold text-[#323130] text-sm">{tkt.customerName}</p>
-                                  <p className="text-[10px] text-[#605e5c] mt-0.5">{tkt.customerEmail}</p>
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                <div className="max-w-xs md:max-w-md">
-                                  <p className="font-bold text-[#323130] truncate">{tkt.title}</p>
-                                  <p className="text-[10px] text-[#605e5c] truncate mt-0.5">{tkt.description}</p>
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                <div className="flex items-center gap-2">
-                                  {tkt.raisedToSaaS ? (
-                                    <span className="text-[10px] text-purple-700 font-bold bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-sm">SaaS Owner Team</span>
-                                  ) : assignedAgent ? (
-                                    <>
-                                      <img
-                                        src={assignedAgent.avatar}
-                                        alt={assignedAgent.name}
-                                        className="w-5.5 h-5.5 rounded-sm object-cover border border-[#edebe9]"
-                                      />
-                                      <span className="font-semibold text-[#605e5c] text-xs">{assignedAgent.name.split(' ')[0]}</span>
-                                    </>
-                                  ) : (
-                                    <span className="text-[10px] text-[#d13438] font-bold bg-[#fff1f1] border border-[#d13438]/10 px-2 py-0.5 rounded-sm">UNASSIGNED</span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                <span className={`px-2 py-0.5 text-[9px] font-bold rounded-sm border ${getStatusColor(tkt.status)}`}>
-                                  {tkt.status}
+                            <div key={cat.id} className="space-y-1 text-xs">
+                              <div className="flex items-center justify-between font-semibold">
+                                <span className="text-[#605e5c] flex items-center gap-1.5">
+                                  {cat.title === 'General Support & Others' ? 'General Support' : cat.title}
                                 </span>
-                              </td>
-                              <td className="p-4 pr-4 text-center">
-                                <button
-                                  onClick={() => setSelectedTicketId(tkt.id)}
-                                  className="bg-[#0078d4] hover:bg-[#106ebe] text-white font-extrabold text-[11px] px-3 py-1.5 rounded-sm shadow-sm cursor-pointer transition-colors"
-                                >
-                                  Manage
-                                </button>
-                              </td>
-                            </tr>
+                                <span className="text-[#323130]">{count} Tickets <span className="text-[10px] text-[#605e5c] font-normal">({Math.round(pct)}%)</span></span>
+                              </div>
+                              {/* Custom horizontal bar */}
+                              <div className="w-full bg-[#f3f2f1] h-2.5 rounded-sm overflow-hidden border border-[#edebe9]">
+                                <div 
+                                  className="bg-[#0078d4] h-full rounded-sm transition-all duration-500" 
+                                  style={{ width: `${pct || 2}%` }}
+                                ></div>
+                              </div>
+                            </div>
                           );
                         })}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
+                      </div>
+                    </div>
+
+                    {/* Status Breakdown Segment Ring */}
+                    <div className="bg-white p-5 rounded-sm border border-[#edebe9] shadow-sm space-y-4">
+                      <div>
+                        <h3 className="font-bold text-[#323130] text-sm">Real-time Resolution Slicing</h3>
+                        <p className="text-xs text-[#605e5c]">SLA performance status tracking</p>
+                      </div>
+
+                      <div className="flex flex-col items-center justify-center py-4 relative">
+                        {/* Outer SVG Segment Wheel */}
+                        <svg className="w-32 h-32" viewBox="0 0 36 36">
+                          <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f3f2f1" strokeWidth="3" />
+                          
+                          {/* Resolved Arc (green) */}
+                          <circle cx="18" cy="18" r="15.915" fill="none" stroke="#107c10" strokeWidth="3" 
+                            strokeDasharray={`${totalTickets ? (resolvedTickets / totalTickets) * 100 : 0} ${totalTickets ? 100 - (resolvedTickets / totalTickets) * 100 : 100}`}
+                            strokeDashoffset="25" 
+                          />
+                          
+                          {/* Open/Awaiting Arc (pink) */}
+                          <circle cx="18" cy="18" r="15.915" fill="none" stroke="#d13438" strokeWidth="3" 
+                            strokeDasharray={`${totalTickets ? (openTickets / totalTickets) * 100 : 0} ${totalTickets ? 100 - (openTickets / totalTickets) * 100 : 100}`}
+                            strokeDashoffset={`${25 - (totalTickets ? (resolvedTickets / totalTickets) * 100 : 0)}`} 
+                          />
+
+                          {/* In Progress Arc (amber) */}
+                          <circle cx="18" cy="18" r="15.915" fill="none" stroke="#ffb900" strokeWidth="3" 
+                            strokeDasharray={`${totalTickets ? (inProgressTickets / totalTickets) * 100 : 0} ${totalTickets ? 100 - (inProgressTickets / totalTickets) * 100 : 100}`}
+                            strokeDashoffset={`${25 - (totalTickets ? ((resolvedTickets + openTickets) / totalTickets) * 100 : 0)}`} 
+                          />
+                        </svg>
+                        
+                        {/* Centered label */}
+                        <div className="absolute text-center leading-none">
+                          <span className="text-xl font-black text-[#323130] block">{slaMetPercentage}%</span>
+                          <span className="text-[8px] font-bold text-[#605e5c] uppercase tracking-widest block">SLA MET</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-[11px] pt-2">
+                        <div className="flex items-center gap-1.5 font-semibold text-[#605e5c]">
+                          <span className="w-2 h-2 rounded-sm bg-[#107c10] block"></span>
+                          <span>Resolved ({resolvedTickets})</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 font-semibold text-[#605e5c]">
+                          <span className="w-2 h-2 rounded-sm bg-[#d13438] block"></span>
+                          <span>Awaiting ({openTickets})</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 font-semibold text-[#605e5c]">
+                          <span className="w-2 h-2 rounded-sm bg-[#ffb900] block"></span>
+                          <span>Working ({inProgressTickets})</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 font-semibold text-[#605e5c]">
+                          <span className="w-2 h-2 rounded-sm bg-[#0078d4] block"></span>
+                          <span>Pending ({pendingTickets})</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ticket Management Workspace Grid / Table */}
+                  <div className="bg-white rounded-sm border border-[#edebe9] shadow-sm overflow-hidden">
+                    {/* Filter controls bar */}
+                    <div className="p-4 bg-[#f8f8f8] border-b border-[#edebe9] flex items-center justify-between flex-wrap gap-4">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {/* Support Stream Toggle */}
+                        <div className="flex items-center p-0.5 bg-slate-200 rounded-sm border border-slate-300">
+                          <button
+                            onClick={() => {
+                              setInboxSource('customer');
+                              setStatusFilter('all');
+                              setIsRaisingSaaS(false);
+                            }}
+                            className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                              inboxSource === 'customer'
+                                ? 'bg-[#0078d4] text-white shadow-xs'
+                                : 'text-[#605e5c] hover:text-[#323130]'
+                            }`}
+                          >
+                            <Lucide.Users size={12} />
+                            <span>My Clients Queue</span>
+                            <span className={`px-1.5 py-0.5 rounded-sm text-[8px] leading-none ${inboxSource === 'customer' ? 'bg-[#106ebe] text-white font-extrabold' : 'bg-slate-300 text-[#323130]'}`}>
+                              {tickets.filter(t => !t.raisedToSaaS).length}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setInboxSource('saas');
+                              setStatusFilter('all');
+                            }}
+                            className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                              inboxSource === 'saas'
+                                ? 'bg-purple-700 text-white shadow-xs'
+                                : 'text-[#605e5c] hover:text-[#323130]'
+                            }`}
+                          >
+                            <Lucide.LifeBuoy size={12} />
+                            <span>SaaS Support Logs</span>
+                            <span className={`px-1.5 py-0.5 rounded-sm text-[8px] leading-none ${inboxSource === 'saas' ? 'bg-purple-800 text-white font-extrabold' : 'bg-slate-300 text-[#323130]'}`}>
+                              {tickets.filter(t => t.raisedToSaaS).length}
+                            </span>
+                          </button>
+                        </div>
+
+                        {/* Search */}
+                        <div className="relative w-64">
+                          <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search Ticket ID, Name, Keyword..."
+                            className="w-full bg-white border border-[#edebe9] rounded-sm pl-9 pr-3 py-1.5 text-xs text-[#323130] focus:outline-none focus:ring-1 focus:ring-[#0078d4] focus:border-[#0078d4]"
+                          />
+                          <Lucide.Search className="absolute left-3 top-2.5 text-[#605e5c]" size={13} />
+                        </div>
+
+                        {/* Status Dropdown */}
+                        <div>
+                          <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="bg-white border border-[#edebe9] rounded-sm px-2.5 py-1.5 text-xs font-semibold text-[#605e5c] focus:outline-none focus:ring-1 focus:ring-[#0078d4] cursor-pointer"
+                          >
+                            <option value="all">Status: All</option>
+                            <option value="open">Status: Open / Awaiting</option>
+                            <option value="in_progress">Status: In Progress</option>
+                            <option value="pending">Status: Pending Agent</option>
+                            <option value="resolved">Status: Resolved</option>
+                            <option value="closed">Status: Closed</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        {inboxSource === 'saas' && !isRaisingSaaS && (
+                          <button
+                            onClick={() => setIsRaisingSaaS(true)}
+                            className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-3 py-1.5 rounded-sm shadow-sm flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <Lucide.Plus size={13} />
+                            <span>Raise Support Ticket to SaaS</span>
+                          </button>
+                        )}
+                        <div className="text-xs text-[#323130] font-semibold">
+                          Showing <strong className="text-[#d13438]">{filteredTickets.length}</strong> of {tickets.filter(t => inboxSource === 'saas' ? t.raisedToSaaS : !t.raisedToSaaS).length} tickets
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      {filteredTickets.length === 0 ? (
+                        <div className="p-12 text-center text-gray-400 space-y-3">
+                          <Lucide.ShieldAlert size={40} className="mx-auto text-slate-300" />
+                          <div>
+                            <h4 className="font-bold text-slate-700 text-xs">No active tickets found</h4>
+                            <p className="text-[11px] max-w-sm mx-auto mt-1">There are no tickets in this stream folder matching your filters or keywords.</p>
+                          </div>
+                          {inboxSource === 'saas' && (
+                            <button
+                              onClick={() => setIsRaisingSaaS(true)}
+                              className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-4 py-2 rounded-sm shadow-sm transition-colors cursor-pointer mt-2"
+                            >
+                              Raise Support Ticket to SaaS
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-[#f8f8f8] text-[10px] font-bold text-[#605e5c] uppercase tracking-wider border-b border-[#edebe9]">
+                              <th className="p-4 w-28 pl-4">Ticket ID</th>
+                              <th className="p-4">Customer/Sender</th>
+                              <th className="p-4">Reported Issue Details</th>
+                              <th className="p-4">Assigned To</th>
+                              <th className="p-4">Status</th>
+                              <th className="p-4 pr-4 text-center">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#f3f2f1]">
+                            {filteredTickets.map((tkt) => {
+                              const assignedAgent = MOCK_AGENTS.find(a => a.id === tkt.assignedAgentId);
+                              return (
+                                <tr key={tkt.id} className="hover:bg-[#f9f9f9] transition-colors">
+                                  <td className="p-4 font-mono font-bold text-[#0078d4] pl-4">{tkt.id}</td>
+                                  <td className="p-4">
+                                    <div>
+                                      <p className="font-bold text-[#323130] text-sm">{tkt.customerName}</p>
+                                      <p className="text-[10px] text-[#605e5c] mt-0.5">{tkt.customerEmail}</p>
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="max-w-xs md:max-w-md">
+                                      <p className="font-bold text-[#323130] truncate">{tkt.title}</p>
+                                      <p className="text-[10px] text-[#605e5c] truncate mt-0.5">{tkt.description}</p>
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex items-center gap-2">
+                                      {tkt.raisedToSaaS ? (
+                                        <span className="text-[10px] text-purple-700 font-bold bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-sm">SaaS Owner Team</span>
+                                      ) : assignedAgent ? (
+                                        <>
+                                          <img
+                                            src={assignedAgent.avatar}
+                                            alt={assignedAgent.name}
+                                            className="w-5.5 h-5.5 rounded-sm object-cover border border-[#edebe9]"
+                                          />
+                                          <span className="font-semibold text-[#605e5c] text-xs">{assignedAgent.name.split(' ')[0]}</span>
+                                        </>
+                                      ) : (
+                                        <span className="text-[10px] text-[#d13438] font-bold bg-[#fff1f1] border border-[#d13438]/10 px-2 py-0.5 rounded-sm">UNASSIGNED</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <span className={`px-2 py-0.5 text-[9px] font-bold rounded-sm border ${getStatusColor(tkt.status)}`}>
+                                      {tkt.status}
+                                    </span>
+                                  </td>
+                                  <td className="p-4 pr-4 text-center">
+                                    <button
+                                      onClick={() => setSelectedTicketId(tkt.id)}
+                                      className="bg-[#0078d4] hover:bg-[#106ebe] text-white font-extrabold text-[11px] px-3 py-1.5 rounded-sm shadow-sm cursor-pointer transition-colors"
+                                    >
+                                      Manage
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                </>
               )}
             </div>
-          </div>
           ) : (
             /* Manage Categories Screen */
             <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -1216,44 +1266,78 @@ export default function AgentPortal({
                         );
                       }
 
-                      // If raised to SaaS, "Me" (this portal user/agent) is the 'customer' sender, and "SaaS operator" is 'agent'
-                      const isMe = activeTicket.raisedToSaaS
-                        ? msg.sender === 'customer'
-                        : msg.sender === 'agent';
-                      
-                      const avatarBg = isMe
-                        ? (activeTicket.raisedToSaaS ? 'bg-purple-700' : 'bg-[#252525]')
-                        : (activeTicket.raisedToSaaS ? 'bg-[#252525]' : 'bg-[#0078d4]');
-                      
-                      const avatarText = isMe
-                        ? (activeTicket.raisedToSaaS ? 'SU' : 'TR')
-                        : (activeTicket.raisedToSaaS ? 'SA' : 'CL');
+                      // Determine if message is sent by "Me" (current viewer)
+                      // If Super Admin: 'agent' is Me, 'customer' is Other side
+                      // If Subscriber/Agent: for SaaS ticket, 'customer' is Me, 'agent' is Other side
+                      //                     for Client ticket, 'agent' is Me, 'customer' is Other side
+                      const isMe = isSuperAdmin
+                        ? msg.sender === 'agent'
+                        : (activeTicket.raisedToSaaS ? msg.sender === 'customer' : msg.sender === 'agent');
 
-                      const bubbleBg = isMe
-                        ? (activeTicket.raisedToSaaS ? 'bg-purple-700 text-white' : 'bg-[#252525] text-white')
-                        : 'bg-white text-[#323130] border border-[#edebe9]';
+                      let avatarBg = 'bg-[#0078d4]';
+                      let avatarText = 'CL';
+                      let bubbleBg = 'bg-white text-[#323130] border border-[#edebe9] shadow-sm';
+                      let badgeText = '';
+
+                      if (activeTicket.raisedToSaaS) {
+                        if (msg.sender === 'agent') {
+                          // SaaS Support / Super Admin Response
+                          avatarBg = 'bg-slate-900';
+                          avatarText = 'SA';
+                          bubbleBg = 'bg-slate-900 text-white shadow-md border border-slate-800';
+                          badgeText = 'SaaS Platform Support';
+                        } else {
+                          // Subscriber / Company Admin Response
+                          avatarBg = 'bg-purple-700';
+                          avatarText = 'SU';
+                          bubbleBg = 'bg-purple-700 text-white shadow-md border border-purple-800';
+                          badgeText = 'Subscriber';
+                        }
+                      } else {
+                        // Standard Client Support Ticket
+                        if (msg.sender === 'agent') {
+                          avatarBg = 'bg-[#252525]';
+                          avatarText = 'TR';
+                          bubbleBg = 'bg-[#252525] text-white shadow-sm';
+                          badgeText = 'CRM Agent';
+                        } else {
+                          avatarBg = 'bg-[#0078d4]';
+                          avatarText = 'CL';
+                          bubbleBg = 'bg-white text-[#323130] border border-[#edebe9] shadow-sm';
+                          badgeText = 'Client';
+                        }
+                      }
 
                       return (
                         <div key={msg.id} className={`flex gap-3 max-w-lg ${isMe ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}>
                           {/* Avatar */}
-                          <div className={`w-8 h-8 rounded-sm flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden ${avatarBg}`}>
+                          <div className={`w-8 h-8 rounded-sm flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden shadow-xs ${avatarBg}`}>
                             {avatarText}
                           </div>
 
                           <div className="space-y-1">
                             <div className={`flex items-baseline gap-2 ${isMe ? 'justify-end' : ''}`}>
                               <span className="text-xs font-bold text-[#323130]">{msg.senderName}</span>
+                              {badgeText && (
+                                <span className={`text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded-xs ${
+                                  msg.sender === 'agent' 
+                                    ? (activeTicket.raisedToSaaS ? 'bg-slate-200 text-slate-800' : 'bg-gray-200 text-gray-800')
+                                    : (activeTicket.raisedToSaaS ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800')
+                                }`}>
+                                  {badgeText}
+                                </span>
+                              )}
                               <span className="text-[9px] text-[#605e5c] font-semibold">
                                 {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
 
-                            <div className={`p-3 rounded-sm text-xs leading-relaxed shadow-sm ${bubbleBg}`}>
+                            <div className={`p-3 rounded-sm text-xs leading-relaxed ${bubbleBg}`}>
                               <p className="whitespace-pre-wrap">{msg.message}</p>
 
                               {msg.attachmentName && (
                                 <div className={`mt-2 p-1.5 rounded-sm flex items-center gap-1.5 text-[10px] font-semibold border ${
-                                  isMe
+                                  msg.sender === 'agent' || isMe
                                     ? 'bg-white/10 text-white border-white/10'
                                     : 'bg-[#f3f2f1] text-[#323130] border-[#edebe9]'
                                 }`}>
