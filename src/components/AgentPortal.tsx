@@ -16,6 +16,7 @@ interface AgentPortalProps {
   onSelectTicketProp?: (id: string | null) => void;
   onCreateSaaSTicket?: (newTicket: Ticket) => void;
   tenant?: Tenant;
+  allTenants?: Tenant[];
   initialInboxSource?: 'customer' | 'saas';
   isSuperAdmin?: boolean;
 }
@@ -113,11 +114,13 @@ export default function AgentPortal({
   onSelectTicketProp,
   onCreateSaaSTicket,
   tenant,
+  allTenants,
   initialInboxSource = 'customer',
   isSuperAdmin = false
 }: AgentPortalProps) {
   // Navigation & filter states
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [tenantFilter, setTenantFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [subTab, setSubTab] = useState<'queue' | 'categories'>(() => {
     return (localStorage.getItem('trueline_agent_subtab') as 'queue' | 'categories') || 'queue';
@@ -180,13 +183,14 @@ export default function AgentPortal({
   // Filter tickets for workspace list
   const filteredTickets = tickets.filter(tkt => {
     const matchesSource = inboxSource === 'saas' ? tkt.raisedToSaaS : !tkt.raisedToSaaS;
+    const matchesTenant = tenantFilter === 'all' || !tkt.tenantId || tkt.tenantId.toLowerCase() === tenantFilter.toLowerCase();
     const matchesStatus = statusFilter === 'all' || tkt.status === statusFilter;
     const matchesSearch = 
       tkt.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tkt.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (tkt.customerEmail && tkt.customerEmail.toLowerCase().includes(searchQuery.toLowerCase())) ||
       tkt.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSource && matchesStatus && matchesSearch;
+    return matchesSource && matchesTenant && matchesStatus && matchesSearch;
   });
 
   const getPriorityColor = (priority: string) => {
@@ -815,6 +819,22 @@ export default function AgentPortal({
                             className="w-full bg-white border border-[#edebe9] rounded-sm pl-9 pr-3 py-1.5 text-xs text-[#323130] focus:outline-none focus:ring-1 focus:ring-[#0078d4] focus:border-[#0078d4]"
                           />
                           <Lucide.Search className="absolute left-3 top-2.5 text-[#605e5c]" size={13} />
+                        </div>
+
+                        {/* Tenant Dropdown Filter */}
+                        <div>
+                          <select
+                            value={tenantFilter}
+                            onChange={(e) => setTenantFilter(e.target.value)}
+                            className="bg-white border border-[#edebe9] rounded-sm px-2.5 py-1.5 text-xs font-bold text-[#0078d4] focus:outline-none focus:ring-1 focus:ring-[#0078d4] cursor-pointer"
+                          >
+                            <option value="all">🏢 Tenant: All Queues</option>
+                            {allTenants && allTenants.map(tn => (
+                              <option key={tn.id} value={tn.id}>
+                                🏢 {tn.companyName}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
                         {/* Status Dropdown */}

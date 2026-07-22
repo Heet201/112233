@@ -17,8 +17,9 @@ export default function App() {
   const [isAgentMode, setIsAgentMode] = useState<boolean>(true); // Start in Agent/Admin mode for easier discovery
   
   // 1. SaaS Role-playing State: super_admin (creator), company_admin (buyer), public_client (end user raising tickets)
+  // Stored in sessionStorage so each browser tab/window can independently be Agent/Admin or Customer Helpdesk view
   const [currentRole, setCurrentRole] = useState<'super_admin' | 'company_admin' | 'public_client'>(() => {
-    return (localStorage.getItem('trueline_crm_current_role') as any) || 'company_admin';
+    return (sessionStorage.getItem('trueline_crm_current_role') as any) || 'company_admin';
   });
 
   // 2. Tenants State
@@ -34,9 +35,22 @@ export default function App() {
     return INITIAL_TENANTS;
   });
 
-  // 3. Current active Tenant ID context
+  // Helper to broadcast state changes across browser tabs/windows
+  const broadcastSync = (type: 'SYNC_TICKETS' | 'SYNC_TENANTS', payload: any) => {
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('trueline_crm_sync_channel_v1');
+        bc.postMessage({ type, payload });
+        bc.close();
+      } catch (e) {
+        // BroadcastChannel fallback
+      }
+    }
+  };
+
+  // 3. Current active Tenant ID context (isolated per tab session)
   const [currentTenantId, setCurrentTenantId] = useState<string>(() => {
-    return localStorage.getItem('trueline_crm_current_tenant_id') || 'custom';
+    return sessionStorage.getItem('trueline_crm_current_tenant_id') || localStorage.getItem('trueline_crm_current_tenant_id') || 'custom';
   });
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -59,16 +73,17 @@ export default function App() {
   // Save tenants whenever changed
   useEffect(() => {
     localStorage.setItem('trueline_crm_tenants_list_v1', JSON.stringify(tenants));
+    broadcastSync('SYNC_TENANTS', tenants);
   }, [tenants]);
 
-  // Save current role
+  // Save current role into tab session
   useEffect(() => {
-    localStorage.setItem('trueline_crm_current_role', currentRole);
+    sessionStorage.setItem('trueline_crm_current_role', currentRole);
   }, [currentRole]);
 
-  // Save acting tenant context
+  // Save acting tenant context into tab session
   useEffect(() => {
-    localStorage.setItem('trueline_crm_current_tenant_id', currentTenantId);
+    sessionStorage.setItem('trueline_crm_current_tenant_id', currentTenantId);
   }, [currentTenantId]);
 
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
@@ -259,7 +274,7 @@ export default function App() {
     setIsAgentMode(false);
   };
 
-  // Load tickets on mount and set up tab sync
+  // Load tickets on mount and set up real-time cross-tab/cross-window sync (BroadcastChannel + storage + 800ms polling)
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -274,12 +289,36 @@ export default function App() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(MOCK_TICKETS));
     }
 
+    // 1. BroadcastChannel API for 0ms latency sync across tabs/windows
+    let bc: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        bc = new BroadcastChannel('trueline_crm_sync_channel_v1');
+        bc.onmessage = (e) => {
+          if (e.data?.type === 'SYNC_TICKETS' && Array.isArray(e.data.payload)) {
+            setTickets(e.data.payload);
+          }
+          if (e.data?.type === 'SYNC_TENANTS' && Array.isArray(e.data.payload)) {
+            setTenants(e.data.payload);
+          }
+        };
+      } catch (err) {}
+    }
+
+    // 2. Storage event listener for standard window event sync
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY && e.newValue) {
         try {
           setTickets(JSON.parse(e.newValue));
         } catch (err) {
           console.error('Failed to sync tickets from storage event', err);
+        }
+      }
+      if (e.key === 'trueline_crm_tenants_list_v1' && e.newValue) {
+        try {
+          setTenants(JSON.parse(e.newValue));
+        } catch (err) {
+          console.error('Failed to sync tenants from storage event', err);
         }
       }
       if (e.key === 'trueline_365_crm_categories' && e.newValue) {
@@ -291,9 +330,40 @@ export default function App() {
       }
     };
 
+    // 3. Fast 800ms polling interval to guarantee sync in iframe sandboxes or separate windows
+    const interval = setInterval(() => {
+      const savedTickets = localStorage.getItem(STORAGE_KEY);
+      if (savedTickets) {
+        try {
+          const parsed = JSON.parse(savedTickets);
+          setTickets((prev) => {
+            if (JSON.stringify(prev) !== JSON.stringify(parsed)) {
+              return parsed;
+            }
+            return prev;
+          });
+        } catch (err) {}
+      }
+
+      const savedTenants = localStorage.getItem('trueline_crm_tenants_list_v1');
+      if (savedTenants) {
+        try {
+          const parsed = JSON.parse(savedTenants);
+          setTenants((prev) => {
+            if (JSON.stringify(prev) !== JSON.stringify(parsed)) {
+              return parsed;
+            }
+            return prev;
+          });
+        } catch (err) {}
+      }
+    }, 800);
+
     window.addEventListener('storage', handleStorageChange);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+      if (bc) bc.close();
     };
   }, []);
 
@@ -340,6 +410,7 @@ export default function App() {
     setTickets((prev) => {
       const updated = [welcomeTicket, ...prev];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      broadcastSync('SYNC_TICKETS', updated);
       return updated;
     });
   };
@@ -349,6 +420,7 @@ export default function App() {
     setTickets((prev) => {
       const updated = [newTicket, ...prev];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      broadcastSync('SYNC_TICKETS', updated);
       return updated;
     });
   };
@@ -367,6 +439,7 @@ export default function App() {
         return tkt;
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      broadcastSync('SYNC_TICKETS', updated);
       return updated;
     });
   };
@@ -395,6 +468,7 @@ export default function App() {
         return tkt;
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      broadcastSync('SYNC_TICKETS', updated);
       return updated;
     });
   };
@@ -423,6 +497,7 @@ export default function App() {
         return tkt;
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      broadcastSync('SYNC_TICKETS', updated);
       return updated;
     });
   };
@@ -454,6 +529,7 @@ export default function App() {
         return tkt;
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      broadcastSync('SYNC_TICKETS', updated);
       return updated;
     });
   };
@@ -483,6 +559,7 @@ export default function App() {
         return tkt;
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      broadcastSync('SYNC_TICKETS', updated);
       return updated;
     });
   };
@@ -512,13 +589,14 @@ export default function App() {
         return tkt;
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      broadcastSync('SYNC_TICKETS', updated);
       return updated;
     });
   };
 
   // Multi-Tenant Isolation Filtering:
-  const currentTenant = tenants.find(t => t.id === currentTenantId) || tenants[0];
-  const tenantTickets = tickets.filter(t => t.tenantId === currentTenantId);
+  const currentTenant = tenants.find(t => t.id.toLowerCase() === currentTenantId.toLowerCase()) || tenants[0];
+  const tenantTickets = tickets.filter(t => !t.tenantId || t.tenantId.toLowerCase() === currentTenant.id.toLowerCase());
 
   // Active Open tickets count for Sidebar badge (Filtered by role!)
   const openCount = currentRole === 'super_admin'
@@ -669,6 +747,7 @@ export default function App() {
                 currentTab === 'support' ? (
                   <AgentPortal
                     tickets={tickets}
+                    allTenants={tenants}
                     categories={categories}
                     onUpdateStatus={handleUpdateStatus}
                     onUpdatePriority={handleUpdatePriority}
@@ -718,7 +797,8 @@ export default function App() {
 
                   {currentTab === 'support' && (
                     <AgentPortal
-                      tickets={tenantTickets}
+                      tickets={tickets}
+                      allTenants={tenants}
                       categories={categories}
                       onUpdateStatus={handleUpdateStatus}
                       onUpdatePriority={handleUpdatePriority}
@@ -746,7 +826,8 @@ export default function App() {
 
                   {currentTab === 'saas_support' && (
                     <AgentPortal
-                      tickets={tenantTickets}
+                      tickets={tickets}
+                      allTenants={tenants}
                       categories={categories}
                       onUpdateStatus={handleUpdateStatus}
                       onUpdatePriority={handleUpdatePriority}
