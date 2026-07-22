@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import * as Lucide from 'lucide-react';
 import { Tenant } from '../types';
+import ShortUrlGeneratorModal from './ShortUrlGeneratorModal';
 
 interface HelpdeskSetupProps {
   tenant: Tenant;
@@ -15,6 +16,7 @@ export default function HelpdeskSetup({
 }: HelpdeskSetupProps) {
   const [copied, setCopied] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isShortenerOpen, setIsShortenerOpen] = useState(false);
 
   const themeColors = {
     blue: { bg: 'bg-[#0078d4]', text: 'text-[#0078d4]', hover: 'hover:bg-blue-50', ring: 'ring-blue-500', name: 'Trueline Blue' },
@@ -71,40 +73,151 @@ export default function HelpdeskSetup({
           {/* Left panel: Branding and settings Form */}
           <div className="lg:col-span-7 space-y-6">
             
-            {/* Shareable Link Block */}
-            <div className="bg-white border border-[#edebe9] p-5 rounded-sm shadow-sm space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                <Lucide.Share2 size={13} />
-                Your Unique Helpdesk Public Link
-              </h3>
-              <div className="flex gap-2">
-                <div className="flex-1 bg-gray-50 border border-[#edebe9] rounded-sm px-3 py-2 flex items-center text-xs text-gray-600 font-mono overflow-x-auto whitespace-nowrap">
-                  {window.location.origin}/?tenant={tenant.id}
+            {/* Shareable Link Block & Custom Domain Configurator */}
+            <div className="bg-white border border-[#edebe9] p-5 rounded-sm shadow-sm space-y-4">
+              <div className="flex justify-between items-center border-b border-gray-100 pb-2.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                  <Lucide.Globe size={15} className="text-[#0078d4]" />
+                  Helpdesk Domain & Public Link Settings
+                </h3>
+                <span className="text-[10px] bg-blue-50 text-[#0078d4] px-2 py-0.5 rounded font-bold border border-blue-100">
+                  Custom Domain Ready
+                </span>
+              </div>
+
+              {/* 1. Custom Domain Input */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-gray-700 flex items-center justify-between">
+                  <span>Official Company Custom Domain (CNAME / White-Label)</span>
+                  <span className="text-[10px] text-emerald-600 font-bold">✓ SSL Active</span>
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={tenant.customDomain || `https://support.${tenant.id}.com`}
+                    onChange={(e) => updateField('customDomain', e.target.value)}
+                    placeholder="https://support.yourcompany.com"
+                    className="flex-1 text-xs border border-gray-300 p-2 rounded-sm focus:outline-none focus:border-[#0078d4] font-mono font-bold text-[#0078d4]"
+                  />
+                  <button
+                    onClick={() => {
+                      const domain = tenant.customDomain || `https://support.${tenant.id}.com`;
+                      navigator.clipboard.writeText(domain).catch(() => {});
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="px-3 py-2 bg-[#0078d4] text-white text-xs font-bold rounded-sm hover:bg-[#106ebe] transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Lucide.Copy size={13} />
+                    <span>Copy Custom Domain</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-500">
+                  Replaces the temporary Google AI Studio / Cloud Run domain with your own branded website address.
+                </p>
+              </div>
+
+              {/* 2. Link Variants Picker */}
+              <div className="space-y-2 pt-2 border-t border-gray-100">
+                <span className="text-[11px] font-bold text-gray-600 uppercase tracking-wider block">Available Public Link Formats:</span>
+                
+                <div className="space-y-2">
+                  {/* Option A: Custom Branded Domain */}
+                  <div className="p-2.5 bg-blue-50/60 border border-blue-200 rounded-sm flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="p-1 bg-blue-600 text-white rounded-xs text-[10px] font-black uppercase">Branded</span>
+                      <span className="font-mono font-bold text-blue-900 truncate">
+                        {tenant.customDomain || `https://support.${tenant.id}.com`}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const link = tenant.customDomain || `https://support.${tenant.id}.com`;
+                        navigator.clipboard.writeText(link);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="text-[11px] font-bold text-[#0078d4] hover:underline flex items-center gap-1 shrink-0 cursor-pointer ml-2"
+                    >
+                      <Lucide.Copy size={12} />
+                      <span>Copy</span>
+                    </button>
+                  </div>
+
+                  {/* Option B: Clean Shortened Vanity URL */}
+                  <div className="p-2.5 bg-emerald-50/60 border border-emerald-200 rounded-sm flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="p-1 bg-emerald-600 text-white rounded-xs text-[10px] font-black uppercase">Short URL</span>
+                      <span className="font-mono font-bold text-emerald-900 truncate">
+                        https://365crm.io/help/{tenant.id}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const link = `https://365crm.io/help/${tenant.id}`;
+                        navigator.clipboard.writeText(link);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="text-[11px] font-bold text-emerald-700 hover:underline flex items-center gap-1 shrink-0 cursor-pointer ml-2"
+                    >
+                      <Lucide.Copy size={12} />
+                      <span>Copy</span>
+                    </button>
+                  </div>
+
+                  {/* Option C: Live Dev / Sandbox Link */}
+                  <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-sm flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="p-1 bg-gray-600 text-white rounded-xs text-[10px] font-black uppercase">Sandbox</span>
+                      <span className="font-mono text-gray-600 truncate">
+                        {window.location.origin}/?tenant={tenant.id}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleCopyLink}
+                      className="text-[11px] font-bold text-gray-700 hover:underline flex items-center gap-1 shrink-0 cursor-pointer ml-2"
+                    >
+                      <Lucide.Copy size={12} />
+                      <span>Copy Sandbox Link</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Instant Short URL Generator Launcher */}
+              <div className="p-3.5 bg-indigo-50/80 border border-indigo-200 rounded-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-indigo-950">
+                    <Lucide.Zap size={14} className="text-amber-500 fill-amber-500" />
+                    <span>Need a Temporary Short URL with Expiration Timer?</span>
+                  </div>
+                  <p className="text-[11px] text-indigo-800 mt-0.5">
+                    Generate temporary 24h/7-day short links (e.g. <code>365crm.io/s/acme-help</code>) for specific tickets or clients.
+                  </p>
                 </div>
                 <button
-                  onClick={handleCopyLink}
-                  className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-sm border transition-all cursor-pointer ${
-                    copied 
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                  }`}
+                  onClick={() => setIsShortenerOpen(true)}
+                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-sm shadow-xs transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
                 >
-                  {copied ? (
-                    <>
-                      <Lucide.CheckCheck size={14} className="text-emerald-600" />
-                      <span>Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Lucide.Copy size={14} />
-                      <span>Copy Link</span>
-                    </>
-                  )}
+                  <Lucide.Zap size={13} />
+                  <span>Generate Short URL</span>
                 </button>
               </div>
-              <p className="text-[11px] text-gray-400">
-                💡 Send this URL to your clients via Email, SMS, or WhatsApp. They can bookmark it to track ongoing queries anytime.
-              </p>
+
+              {/* DNS setup callout */}
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-sm text-xs text-amber-900 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <Lucide.ShieldAlert size={14} className="text-amber-600" />
+                  <span>How to remove AI Studio / Cloud Run domain in production?</span>
+                </div>
+                <p className="text-[11px] text-amber-800">
+                  Add a <strong>CNAME record</strong> in your domain provider (e.g., Cloudflare, GoDaddy, Namecheap):
+                </p>
+                <div className="font-mono text-[10px] bg-white p-1.5 border border-amber-200 rounded text-amber-900">
+                  CNAME support.{tenant.id || 'company'}.com ➔ gateway.trueline365.com
+                </div>
+              </div>
             </div>
 
             {/* Custom Branding Panel */}
@@ -343,6 +456,13 @@ export default function HelpdeskSetup({
         </div>
 
       </div>
+
+      {/* Temporary Short URL Generator Modal */}
+      <ShortUrlGeneratorModal 
+        isOpen={isShortenerOpen}
+        onClose={() => setIsShortenerOpen(false)}
+        tenant={tenant}
+      />
     </div>
   );
 }

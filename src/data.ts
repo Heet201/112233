@@ -137,7 +137,8 @@ export const INITIAL_TENANTS: Tenant[] = [
     subtitle: 'Search articles or submit a technical helpdesk ticket to our experts',
     supportEmail: 'support@truelinesolution.com',
     enableAttachments: true,
-    logoText: 'TL'
+    logoText: 'TL',
+    customDomain: 'https://support.truelinesolution.com'
   },
   {
     id: 'tesla',
@@ -153,7 +154,8 @@ export const INITIAL_TENANTS: Tenant[] = [
     subtitle: 'Submit tickets for vehicle delivery, software updates, and Supercharger access',
     supportEmail: 'service@tesla.com',
     enableAttachments: true,
-    logoText: 'TSLA'
+    logoText: 'TSLA',
+    customDomain: 'https://help.teslaindia.com'
   },
   {
     id: 'acme',
@@ -169,7 +171,8 @@ export const INITIAL_TENANTS: Tenant[] = [
     subtitle: 'Official customer support for explosive devices, rocket skates, and giant magnets',
     supportEmail: 'orders@acme.com',
     enableAttachments: false,
-    logoText: 'ACME'
+    logoText: 'ACME',
+    customDomain: 'https://support.acme.com'
   }
 ];
 

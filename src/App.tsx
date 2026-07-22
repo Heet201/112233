@@ -7,6 +7,7 @@ import AdminLogin from './components/AdminLogin';
 import SuperAdminPortal from './components/SuperAdminPortal';
 import HelpdeskSetup from './components/HelpdeskSetup';
 import SaaSPlatformSupport from './components/SaaSPlatformSupport';
+import ShortUrlGeneratorModal from './components/ShortUrlGeneratorModal';
 import { Ticket, TicketStatus, TicketPriority, TicketMessage, CategoryDetail, Tenant } from './types';
 import { MOCK_TICKETS, MOCK_AGENTS, SUPPORT_CATEGORIES, INITIAL_TENANTS } from './data';
 
@@ -87,6 +88,7 @@ export default function App() {
   }, [currentTenantId]);
 
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
+  const [isTopShortenerOpen, setIsTopShortenerOpen] = useState<boolean>(false);
 
   // States for ticket tracking & real-time toast notifications
   const [activeAgentTicketId, setActiveAgentTicketId] = useState<string | null>(() => {
@@ -666,10 +668,10 @@ export default function App() {
 
           <button
             onClick={() => {
-              const directLink = `${window.location.origin}/?tenant=${currentTenantId}`;
-              navigator.clipboard.writeText(directLink).then(() => {
+              const domainLink = currentTenant.customDomain || `https://support.${currentTenantId}.com`;
+              navigator.clipboard.writeText(domainLink).then(() => {
                 setCopiedLink(true);
-                setTimeout(() => setCopiedLink(false), 2000);
+                setTimeout(() => setCopiedLink(false), 2500);
               });
             }}
             className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-xs transition-all cursor-pointer border ${
@@ -677,9 +679,17 @@ export default function App() {
                 ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                 : 'bg-indigo-950 text-indigo-300 border-indigo-800 hover:bg-indigo-900'
             }`}
-            title="Copy direct customer shareable link"
+            title="Copy Branded Custom Link for clients"
           >
-            <span>{copiedLink ? '✓ Copied!' : '📋 Copy Direct Link'}</span>
+            <span>{copiedLink ? `✓ Copied Custom Link (${currentTenant.customDomain || `support.${currentTenantId}.com`})` : '📋 Copy Branded Custom Link'}</span>
+          </button>
+
+          <button
+            onClick={() => setIsTopShortenerOpen(true)}
+            className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-all cursor-pointer"
+            title="Generate Temporary Short URL with Expiration Timer"
+          >
+            <span>⚡ Temporary Short URL</span>
           </button>
         </div>
 
@@ -913,6 +923,13 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Global Temporary Short URL Generator Modal */}
+      <ShortUrlGeneratorModal
+        isOpen={isTopShortenerOpen}
+        onClose={() => setIsTopShortenerOpen(false)}
+        tenant={currentTenant}
+      />
 
       {/* Persistent floating Google AI Studio badge at the bottom-right */}
       <a

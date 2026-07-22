@@ -29,6 +29,7 @@ export interface Tenant {
   supportEmail: string;
   enableAttachments: boolean;
   logoText: string;
+  customDomain?: string;
 }
 
 export interface Ticket {
