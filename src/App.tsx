@@ -520,8 +520,10 @@ export default function App() {
   const currentTenant = tenants.find(t => t.id === currentTenantId) || tenants[0];
   const tenantTickets = tickets.filter(t => t.tenantId === currentTenantId);
 
-  // Active Open tickets count for Sidebar badge (Filtered by tenant ID!)
-  const openCount = tenantTickets.filter((t) => t.status === 'open' || t.status === 'in_progress').length;
+  // Active Open tickets count for Sidebar badge (Filtered by role!)
+  const openCount = currentRole === 'super_admin'
+    ? tickets.filter(t => t.raisedToSaaS && (t.status === 'open' || t.status === 'in_progress')).length
+    : tenantTickets.filter(t => !t.raisedToSaaS && (t.status === 'open' || t.status === 'in_progress')).length;
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#faf9f8] text-slate-800">
@@ -648,6 +650,7 @@ export default function App() {
               isAgentMode={isAgentMode}
               setIsAgentMode={setIsAgentMode}
               isAdminLoggedIn={isAdminLoggedIn}
+              currentRole={currentRole}
             />
 
             <main className="flex-1 min-h-0 overflow-hidden flex flex-col bg-[#f3f2f1]">
@@ -663,19 +666,43 @@ export default function App() {
                 />
               ) : currentRole === 'super_admin' ? (
                 /* 👑 SUPER ADMIN VIEW */
-                <SuperAdminPortal
-                  tenants={tenants}
-                  tickets={tickets}
-                  onAddTenant={handleAddTenant}
-                  onUpdateTenant={handleUpdateTenant}
-                  onSelectTenant={(tenantId) => {
-                    setCurrentTenantId(tenantId);
-                    setCurrentRole('company_admin');
-                    setCurrentTab('dashboard');
-                  }}
-                  onAddMessage={handleAddMessage}
-                  onUpdateStatus={handleUpdateStatus}
-                />
+                currentTab === 'support' ? (
+                  <AgentPortal
+                    tickets={tickets}
+                    categories={categories}
+                    onUpdateStatus={handleUpdateStatus}
+                    onUpdatePriority={handleUpdatePriority}
+                    onAssignAgent={handleAssignAgent}
+                    onAddMessage={handleAddMessage}
+                    onLogout={handleAdminLogout}
+                    onAddCategory={handleCreateCategory}
+                    selectedTicketIdProp={activeAgentTicketId}
+                    onSelectTicketProp={setActiveAgentTicketId}
+                    onCreateSaaSTicket={handleCreateTicket}
+                    tenant={tenants[0]}
+                    initialInboxSource="saas"
+                  />
+                ) : (
+                  <SuperAdminPortal
+                    tenants={tenants}
+                    tickets={tickets}
+                    categories={categories}
+                    onAddTenant={handleAddTenant}
+                    onUpdateTenant={handleUpdateTenant}
+                    onSelectTenant={(tenantId) => {
+                      setCurrentTenantId(tenantId);
+                      setCurrentRole('company_admin');
+                      setCurrentTab('dashboard');
+                    }}
+                    onAddMessage={handleAddMessage}
+                    onUpdateStatus={handleUpdateStatus}
+                    onUpdatePriority={handleUpdatePriority}
+                    onAssignAgent={handleAssignAgent}
+                    onAddCategory={handleCreateCategory}
+                    onCreateSaaSTicket={handleCreateTicket}
+                    initialTab="tenants"
+                  />
+                )
               ) : (
                 /* 🏢 COMPANY ADMIN VIEW (SWITCHES DYNAMICALLY BY TAB) */
                 <>
@@ -690,7 +717,7 @@ export default function App() {
 
                   {currentTab === 'support' && (
                     <AgentPortal
-                      tickets={tenantTickets.filter(t => !t.raisedToSaaS)}
+                      tickets={tenantTickets}
                       categories={categories}
                       onUpdateStatus={handleUpdateStatus}
                       onUpdatePriority={handleUpdatePriority}
@@ -700,6 +727,9 @@ export default function App() {
                       onAddCategory={handleCreateCategory}
                       selectedTicketIdProp={activeAgentTicketId}
                       onSelectTicketProp={setActiveAgentTicketId}
+                      onCreateSaaSTicket={handleCreateTicket}
+                      tenant={currentTenant}
+                      initialInboxSource="customer"
                     />
                   )}
 
@@ -714,11 +744,20 @@ export default function App() {
                   )}
 
                   {currentTab === 'saas_support' && (
-                    <SaaSPlatformSupport
-                      tenant={currentTenant}
-                      tickets={tickets}
-                      onCreateTicket={handleCreateTicket}
+                    <AgentPortal
+                      tickets={tenantTickets}
+                      categories={categories}
+                      onUpdateStatus={handleUpdateStatus}
+                      onUpdatePriority={handleUpdatePriority}
+                      onAssignAgent={handleAssignAgent}
                       onAddMessage={handleAddMessage}
+                      onLogout={handleAdminLogout}
+                      onAddCategory={handleCreateCategory}
+                      selectedTicketIdProp={activeAgentTicketId}
+                      onSelectTicketProp={setActiveAgentTicketId}
+                      onCreateSaaSTicket={handleCreateTicket}
+                      tenant={currentTenant}
+                      initialInboxSource="saas"
                     />
                   )}
                 </>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import * as Lucide from 'lucide-react';
-import { Ticket, TicketStatus, TicketPriority, TicketMessage, Agent, CategoryDetail } from '../types';
+import { Ticket, TicketStatus, TicketPriority, TicketMessage, Agent, CategoryDetail, Tenant } from '../types';
 import { MOCK_AGENTS, QUICK_TEMPLATES, MOCK_CONTACTS } from '../data';
 
 interface AgentPortalProps {
@@ -14,7 +14,90 @@ interface AgentPortalProps {
   onAddCategory?: (newCategory: CategoryDetail) => void;
   selectedTicketIdProp?: string | null;
   onSelectTicketProp?: (id: string | null) => void;
+  onCreateSaaSTicket?: (newTicket: Ticket) => void;
+  tenant?: Tenant;
+  initialInboxSource?: 'customer' | 'saas';
 }
+
+interface HelpCategory {
+  id: string;
+  title: string;
+  iconName: string;
+  subCategories: string[];
+}
+
+const SAAS_CATEGORIES: HelpCategory[] = [
+  {
+    id: 'crm_setup',
+    title: 'CRM Setup & Customization',
+    iconName: 'Settings',
+    subCategories: [
+      'Field customization & layout issues',
+      'User roles & permissions mapping',
+      'Workflow automation triggers not firing'
+    ]
+  },
+  {
+    id: 'leads_pipeline',
+    title: 'Leads & Sales Pipeline',
+    iconName: 'Sliders',
+    subCategories: [
+      'CSV lead import failing/mapping error',
+      'Duplicate lead detection rule troubles',
+      'Automatic lead routing & assignment failure'
+    ]
+  },
+  {
+    id: 'call_dialer',
+    title: 'Call Analyzer & Dialer',
+    iconName: 'PhoneCall',
+    subCategories: [
+      'SIP VoIP Trunk registration failed',
+      'Call recording audio files not generated',
+      'AI Speech-to-Text and Sentiment Analysis'
+    ]
+  },
+  {
+    id: 'api_integrations',
+    title: 'API & Integrations',
+    iconName: 'Code',
+    subCategories: [
+      'WhatsApp Business API account verification',
+      'Gmail/Outlook email sync disconnected',
+      'Zapier & Make.com custom webhook'
+    ]
+  },
+  {
+    id: 'payments_subscriptions',
+    title: 'Payments & Subscriptions',
+    iconName: 'Coins',
+    subCategories: [
+      'Transaction failed but bank account debited',
+      'Upgrade current Trueline 365 license',
+      'Invoice tax details correction request'
+    ]
+  },
+  {
+    id: 'hrms_attendance',
+    title: 'HRMS & Staff Attendance',
+    iconName: 'Database',
+    subCategories: [
+      'Mobile App location check-in biometrics',
+      'Staff leave balance calculation discrepancy',
+      'Monthly Payroll calculation error'
+    ]
+  },
+  {
+    id: 'general_support',
+    title: 'General Support & Others',
+    iconName: 'HelpCircle',
+    subCategories: [
+      'General query regarding platform roadmap',
+      'SaaS partner program eligibility details',
+      'Report general performance bug'
+    ]
+  }
+];
 
 export default function AgentPortal({
   tickets,
@@ -26,7 +109,10 @@ export default function AgentPortal({
   onLogout,
   onAddCategory,
   selectedTicketIdProp,
-  onSelectTicketProp
+  onSelectTicketProp,
+  onCreateSaaSTicket,
+  tenant,
+  initialInboxSource = 'customer'
 }: AgentPortalProps) {
   // Navigation & filter states
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -34,6 +120,24 @@ export default function AgentPortal({
   const [subTab, setSubTab] = useState<'queue' | 'categories'>(() => {
     return (localStorage.getItem('trueline_agent_subtab') as 'queue' | 'categories') || 'queue';
   });
+
+  // Dual-stream toggle (just like SuperAdminPortal)
+  const [inboxSource, setInboxSource] = useState<'customer' | 'saas'>(initialInboxSource);
+
+  useEffect(() => {
+    if (initialInboxSource) {
+      setInboxSource(initialInboxSource);
+    }
+  }, [initialInboxSource]);
+
+  // SaaS ticket raising flow states inside Subscriber Support Desk
+  const [isRaisingSaaS, setIsRaisingSaaS] = useState(false);
+  const [selectedSaaSCategory, setSelectedSaaSCategory] = useState<HelpCategory | null>(null);
+  const [selectedSaaSSubCategory, setSelectedSaaSSubCategory] = useState('');
+  const [saasSubject, setSaasSubject] = useState('');
+  const [saasPriority, setSaasPriority] = useState<TicketPriority>('medium');
+  const [saasDescription, setSaasDescription] = useState('');
+  const [saasFormSuccess, setSaasFormSuccess] = useState('');
 
   // Category Form State
   const [newCatTitle, setNewCatTitle] = useState('');
@@ -52,15 +156,16 @@ export default function AgentPortal({
   const [agentReply, setAgentReply] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
 
-  // Stats calculation
-  const totalTickets = tickets.length;
-  const openTickets = tickets.filter(t => t.status === 'open').length;
-  const inProgressTickets = tickets.filter(t => t.status === 'in_progress').length;
-  const pendingTickets = tickets.filter(t => t.status === 'pending').length;
-  const resolvedTickets = tickets.filter(t => t.status === 'resolved' || t.status === 'closed').length;
+  // Stats calculation - scoped to the currently active stream
+  const streamTickets = tickets.filter(t => inboxSource === 'saas' ? t.raisedToSaaS : !t.raisedToSaaS);
+  const totalTickets = streamTickets.length;
+  const openTickets = streamTickets.filter(t => t.status === 'open').length;
+  const inProgressTickets = streamTickets.filter(t => t.status === 'in_progress').length;
+  const pendingTickets = streamTickets.filter(t => t.status === 'pending').length;
+  const resolvedTickets = streamTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length;
   
   // Calculate average rating
-  const ratedTickets = tickets.filter(t => t.rating !== undefined);
+  const ratedTickets = streamTickets.filter(t => t.rating !== undefined);
   const averageRating = ratedTickets.length > 0
     ? (ratedTickets.reduce((sum, t) => sum + (t.rating || 0), 0) / ratedTickets.length).toFixed(1)
     : '4.9';
@@ -72,13 +177,14 @@ export default function AgentPortal({
 
   // Filter tickets for workspace list
   const filteredTickets = tickets.filter(tkt => {
+    const matchesSource = inboxSource === 'saas' ? tkt.raisedToSaaS : !tkt.raisedToSaaS;
     const matchesStatus = statusFilter === 'all' || tkt.status === statusFilter;
     const matchesSearch = 
       tkt.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tkt.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tkt.customerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (tkt.customerEmail && tkt.customerEmail.toLowerCase().includes(searchQuery.toLowerCase())) ||
       tkt.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesStatus && matchesSearch;
+    return matchesSource && matchesStatus && matchesSearch;
   });
 
   const getPriorityColor = (priority: string) => {
@@ -106,11 +212,15 @@ export default function AgentPortal({
     e.preventDefault();
     if (!agentReply.trim() || !selectedTicketId) return;
 
+    const isSaaSTicket = activeTicket?.raisedToSaaS;
+
     // Send the reply
     const reply: TicketMessage = {
-      id: `msg-agent-${Date.now()}`,
-      sender: 'agent',
-      senderName: 'Heet Dhameliya (CRM Lead)', // Or Pooja Patel
+      id: `msg-${isSaaSTicket ? 'cust' : 'agent'}-${Date.now()}`,
+      sender: isSaaSTicket ? 'customer' : 'agent',
+      senderName: isSaaSTicket 
+        ? `${tenant?.ownerName || 'Company Admin'} (${tenant?.companyName || 'Subscriber'})`
+        : 'Heet Dhameliya (CRM Lead)', 
       message: agentReply.trim(),
       createdAt: new Date().toISOString()
     };
@@ -119,11 +229,55 @@ export default function AgentPortal({
     setAgentReply('');
     setSelectedTemplate('');
 
-    // Auto update status to In Progress if it was open
-    const currentTicket = tickets.find(t => t.id === selectedTicketId);
-    if (currentTicket && currentTicket.status === 'open') {
+    // Auto update status to In Progress if it was open (only for customer-facing tickets)
+    if (!isSaaSTicket && activeTicket && activeTicket.status === 'open') {
       onUpdateStatus(selectedTicketId, 'in_progress');
     }
+  };
+
+  const handleSubmitSaaSTicket = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!saasSubject.trim() || !saasDescription.trim() || !tenant) return;
+
+    const ticketId = `SAAS-${Math.floor(1000 + Math.random() * 9000)}`;
+    const now = new Date().toISOString();
+
+    const newTicket: Ticket = {
+      id: ticketId,
+      tenantId: tenant.id,
+      raisedToSaaS: true,
+      title: saasSubject,
+      description: saasDescription,
+      category: selectedSaaSCategory?.title || 'SaaS Platform Support Request',
+      subCategory: selectedSaaSSubCategory || 'SaaS Platform Support Request',
+      status: 'open',
+      priority: saasPriority,
+      customerName: tenant.ownerName || 'Company Administrator',
+      customerEmail: tenant.ownerEmail || 'admin@tenant.com',
+      createdAt: now,
+      updatedAt: now,
+      messages: [
+        {
+          id: `msg-${Date.now()}-1`,
+          sender: 'customer',
+          senderName: `${tenant.ownerName} (${tenant.companyName})`,
+          message: saasDescription,
+          createdAt: now
+        }
+      ]
+    };
+
+    if (onCreateSaaSTicket) {
+      onCreateSaaSTicket(newTicket);
+    }
+    setSaasSubject('');
+    setSaasDescription('');
+    setIsRaisingSaaS(false);
+    setSelectedSaaSCategory(null);
+    setSelectedSaaSSubCategory('');
+    setSaasFormSuccess('Your support ticket has been successfully raised to the SaaS platform team!');
+    setTimeout(() => setSaasFormSuccess(''), 4000);
+    setSelectedTicketId(ticketId); // Select the newly raised ticket
   };
 
   const handleTemplateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -400,13 +554,52 @@ export default function AgentPortal({
               {/* Filter controls bar */}
               <div className="p-4 bg-[#f8f8f8] border-b border-[#edebe9] flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3 flex-wrap">
+                  {/* Support Stream Toggle */}
+                  <div className="flex items-center p-0.5 bg-slate-200 rounded-sm border border-slate-300">
+                    <button
+                      onClick={() => {
+                        setInboxSource('customer');
+                        setStatusFilter('all');
+                        setIsRaisingSaaS(false);
+                      }}
+                      className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                        inboxSource === 'customer'
+                          ? 'bg-[#0078d4] text-white shadow-xs'
+                          : 'text-[#605e5c] hover:text-[#323130]'
+                      }`}
+                    >
+                      <Lucide.Users size={12} />
+                      <span>My Clients Queue</span>
+                      <span className={`px-1.5 py-0.5 rounded-sm text-[8px] leading-none ${inboxSource === 'customer' ? 'bg-[#106ebe] text-white font-extrabold' : 'bg-slate-300 text-[#323130]'}`}>
+                        {tickets.filter(t => !t.raisedToSaaS).length}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setInboxSource('saas');
+                        setStatusFilter('all');
+                      }}
+                      className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                        inboxSource === 'saas'
+                          ? 'bg-purple-700 text-white shadow-xs'
+                          : 'text-[#605e5c] hover:text-[#323130]'
+                      }`}
+                    >
+                      <Lucide.LifeBuoy size={12} />
+                      <span>SaaS Support Logs</span>
+                      <span className={`px-1.5 py-0.5 rounded-sm text-[8px] leading-none ${inboxSource === 'saas' ? 'bg-purple-800 text-white font-extrabold' : 'bg-slate-300 text-[#323130]'}`}>
+                        {tickets.filter(t => t.raisedToSaaS).length}
+                      </span>
+                    </button>
+                  </div>
+
                   {/* Search */}
                   <div className="relative w-64">
                     <input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search Client ID, Name, Keyword..."
+                      placeholder="Search Ticket ID, Name, Keyword..."
                       className="w-full bg-white border border-[#edebe9] rounded-sm pl-9 pr-3 py-1.5 text-xs text-[#323130] focus:outline-none focus:ring-1 focus:ring-[#0078d4] focus:border-[#0078d4]"
                     />
                     <Lucide.Search className="absolute left-3 top-2.5 text-[#605e5c]" size={13} />
@@ -429,77 +622,271 @@ export default function AgentPortal({
                   </div>
                 </div>
 
-                <div className="text-xs text-[#323130] font-semibold">
-                  Showing <strong className="text-[#d13438]">{filteredTickets.length}</strong> of {tickets.length} tickets
+                <div className="flex items-center gap-3">
+                  {inboxSource === 'saas' && !isRaisingSaaS && (
+                    <button
+                      onClick={() => setIsRaisingSaaS(true)}
+                      className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-3 py-1.5 rounded-sm shadow-sm flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Lucide.Plus size={13} />
+                      <span>Raise Support Ticket to SaaS</span>
+                    </button>
+                  )}
+                  <div className="text-xs text-[#323130] font-semibold">
+                    Showing <strong className="text-[#d13438]">{filteredTickets.length}</strong> of {tickets.filter(t => inboxSource === 'saas' ? t.raisedToSaaS : !t.raisedToSaaS).length} tickets
+                  </div>
                 </div>
               </div>
 
-              {/* Data Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-[#f8f8f8] text-[10px] font-bold text-[#605e5c] uppercase tracking-wider border-b border-[#edebe9]">
-                      <th className="p-4 w-28 pl-4">Ticket ID</th>
-                      <th className="p-4">Customer Client</th>
-                      <th className="p-4">Reported Issue Details</th>
-                      <th className="p-4">Assigned To</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4 pr-4 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#f3f2f1]">
-                    {filteredTickets.map((tkt) => {
-                      const assignedAgent = MOCK_AGENTS.find(a => a.id === tkt.assignedAgentId);
-                      return (
-                        <tr key={tkt.id} className="hover:bg-[#f9f9f9] transition-colors">
-                          <td className="p-4 font-mono font-bold text-[#0078d4] pl-4">{tkt.id}</td>
-                          <td className="p-4">
-                            <div>
-                              <p className="font-bold text-[#323130] text-sm">{tkt.customerName}</p>
-                              <p className="text-[10px] text-[#605e5c] mt-0.5">{tkt.customerEmail}</p>
+              {saasFormSuccess && (
+                <div className="p-3 bg-emerald-50 border-b border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-1.5">
+                  <Lucide.CheckCircle size={14} className="text-emerald-600 shrink-0" />
+                  <span>{saasFormSuccess}</span>
+                </div>
+              )}
+
+              {isRaisingSaaS ? (
+                /* RAISE TICKET FLOW INSIDE AGENT PORTAL */
+                !selectedSaaSCategory ? (
+                  /* Step 1: Category Picker */
+                  <div className="p-6 bg-slate-50">
+                    <div className="mb-6 flex justify-between items-center">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                          <Lucide.LifeBuoy className="text-purple-700" size={16} />
+                          Select SaaS Support Category
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-0.5">Choose a help desk domain to route your technical query to the Super Admin squad.</p>
+                      </div>
+                      <button
+                        onClick={() => setIsRaisingSaaS(false)}
+                        className="text-xs text-[#605e5c] hover:text-[#323130] font-semibold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Lucide.X size={14} />
+                        Cancel
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {SAAS_CATEGORIES.map((cat) => {
+                        const IconComp = (Lucide as any)[cat.iconName] || Lucide.HelpCircle;
+                        return (
+                          <button
+                            key={cat.id}
+                            onClick={() => {
+                              setSelectedSaaSCategory(cat);
+                              setSelectedSaaSSubCategory(cat.subCategories[0]);
+                            }}
+                            className="bg-white border border-[#edebe9] p-5 rounded-sm shadow-xs text-left hover:border-purple-600 hover:shadow-md transition-all group cursor-pointer"
+                          >
+                            <div className="w-9 h-9 rounded-sm bg-purple-50 text-purple-700 flex items-center justify-center border border-purple-100 mb-3 group-hover:bg-purple-100">
+                              <IconComp size={18} />
                             </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="max-w-xs md:max-w-md">
-                              <p className="font-bold text-[#323130] truncate">{tkt.title}</p>
-                              <p className="text-[10px] text-[#605e5c] truncate mt-0.5">{tkt.description}</p>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                              {assignedAgent ? (
-                                <>
-                                  <img
-                                    src={assignedAgent.avatar}
-                                    alt={assignedAgent.name}
-                                    className="w-5.5 h-5.5 rounded-sm object-cover border border-[#edebe9]"
-                                  />
-                                  <span className="font-semibold text-[#605e5c] text-xs">{assignedAgent.name.split(' ')[0]}</span>
-                                </>
-                              ) : (
-                                <span className="text-[10px] text-[#d13438] font-bold bg-[#fff1f1] border border-[#d13438]/10 px-2 py-0.5 rounded-sm">UNASSIGNED</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <span className={`px-2 py-0.5 text-[9px] font-bold rounded-sm border ${getStatusColor(tkt.status)}`}>
-                              {tkt.status}
-                            </span>
-                          </td>
-                          <td className="p-4 pr-4 text-center">
+                            <h4 className="font-bold text-[#323130] text-xs mb-1 group-hover:text-purple-700">{cat.title}</h4>
+                            <p className="text-[10px] text-gray-400 line-clamp-2 leading-relaxed">{cat.subCategories.join(', ')}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  /* Step 2: Explanation Form */
+                  <form onSubmit={handleSubmitSaaSTicket} className="p-6 bg-white space-y-4">
+                    <div className="flex items-center justify-between border-b border-[#edebe9] pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSaaSCategory(null)}
+                          className="p-1 hover:bg-[#f3f2f1] rounded-sm text-purple-700 cursor-pointer"
+                        >
+                          <Lucide.ChevronLeft size={16} />
+                        </button>
+                        <div>
+                          <h3 className="text-xs font-bold text-slate-800">
+                            Raising in: <span className="text-purple-700">{selectedSaaSCategory.title}</span>
+                          </h3>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsRaisingSaaS(false);
+                          setSelectedSaaSCategory(null);
+                        }}
+                        className="text-xs text-[#605e5c] hover:text-[#323130] font-semibold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Lucide.X size={14} />
+                        Cancel
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase">Issue Severity</label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {(['low', 'medium', 'high'] as const).map((p) => (
                             <button
-                              onClick={() => setSelectedTicketId(tkt.id)}
-                              className="bg-[#0078d4] hover:bg-[#106ebe] text-white font-extrabold text-[11px] px-3 py-1.5 rounded-sm shadow-sm cursor-pointer transition-colors"
+                              type="button"
+                              key={p}
+                              onClick={() => setSaasPriority(p)}
+                              className={`py-1.5 text-[10px] uppercase font-bold border rounded-sm transition-colors cursor-pointer ${
+                                saasPriority === p
+                                  ? 'bg-purple-700 text-white border-purple-700'
+                                  : 'bg-white text-slate-600 border-[#edebe9] hover:bg-slate-50'
+                              }`}
                             >
-                              Manage
+                              {p}
                             </button>
-                          </td>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-bold text-slate-600 uppercase">Routing Classification</label>
+                        <select
+                          value={selectedSaaSSubCategory}
+                          onChange={(e) => setSelectedSaaSSubCategory(e.target.value)}
+                          className="w-full text-xs p-1.5 border border-gray-300 rounded-sm focus:outline-none focus:border-purple-700 bg-white"
+                        >
+                          {selectedSaaSCategory.subCategories.map((sub: string) => (
+                            <option key={sub} value={sub}>{sub}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase">Brief Subject Summary *</label>
+                      <input
+                        type="text"
+                        required
+                        value={saasSubject}
+                        onChange={(e) => setSaasSubject(e.target.value)}
+                        placeholder="e.g., Unable to sync WhatsApp Business API gateway..."
+                        className="w-full text-xs p-2 border border-gray-300 rounded-sm focus:outline-none focus:border-purple-700 bg-white"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-slate-600 uppercase">Detailed Explanation *</label>
+                      <textarea
+                        required
+                        value={saasDescription}
+                        onChange={(e) => setSaasDescription(e.target.value)}
+                        placeholder="Provide details for SaaS engineering support..."
+                        rows={4}
+                        className="w-full text-xs p-2.5 border border-gray-300 rounded-sm focus:outline-none focus:border-purple-700 bg-white font-sans"
+                      />
+                    </div>
+
+                    <div className="pt-3 border-t border-[#edebe9] flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSaaSCategory(null);
+                          setIsRaisingSaaS(false);
+                        }}
+                        className="text-xs font-bold text-slate-500 hover:text-slate-700 px-3 py-2 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-4 py-2 rounded-sm shadow-xs cursor-pointer"
+                      >
+                        Raise Ticket to SaaS
+                      </button>
+                    </div>
+                  </form>
+                )
+              ) : (
+                /* OTHERWISE RENDER THE STANDARD DATA TABLE */
+                <div className="overflow-x-auto">
+                  {filteredTickets.length === 0 ? (
+                    <div className="p-12 text-center text-gray-400 space-y-3">
+                      <Lucide.ShieldAlert size={40} className="mx-auto text-slate-300" />
+                      <div>
+                        <h4 className="font-bold text-slate-700 text-xs">No active tickets found</h4>
+                        <p className="text-[11px] max-w-sm mx-auto mt-1">There are no tickets in this stream folder matching your filters or keywords.</p>
+                      </div>
+                      {inboxSource === 'saas' && (
+                        <button
+                          onClick={() => setIsRaisingSaaS(true)}
+                          className="bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs px-4 py-2 rounded-sm shadow-sm transition-colors cursor-pointer mt-2"
+                        >
+                          Raise Support Ticket to SaaS
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-[#f8f8f8] text-[10px] font-bold text-[#605e5c] uppercase tracking-wider border-b border-[#edebe9]">
+                          <th className="p-4 w-28 pl-4">Ticket ID</th>
+                          <th className="p-4">Customer/Sender</th>
+                          <th className="p-4">Reported Issue Details</th>
+                          <th className="p-4">Assigned To</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4 pr-4 text-center">Action</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                      </thead>
+                      <tbody className="divide-y divide-[#f3f2f1]">
+                        {filteredTickets.map((tkt) => {
+                          const assignedAgent = MOCK_AGENTS.find(a => a.id === tkt.assignedAgentId);
+                          return (
+                            <tr key={tkt.id} className="hover:bg-[#f9f9f9] transition-colors">
+                              <td className="p-4 font-mono font-bold text-[#0078d4] pl-4">{tkt.id}</td>
+                              <td className="p-4">
+                                <div>
+                                  <p className="font-bold text-[#323130] text-sm">{tkt.customerName}</p>
+                                  <p className="text-[10px] text-[#605e5c] mt-0.5">{tkt.customerEmail}</p>
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <div className="max-w-xs md:max-w-md">
+                                  <p className="font-bold text-[#323130] truncate">{tkt.title}</p>
+                                  <p className="text-[10px] text-[#605e5c] truncate mt-0.5">{tkt.description}</p>
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center gap-2">
+                                  {tkt.raisedToSaaS ? (
+                                    <span className="text-[10px] text-purple-700 font-bold bg-purple-50 border border-purple-100 px-2 py-0.5 rounded-sm">SaaS Owner Team</span>
+                                  ) : assignedAgent ? (
+                                    <>
+                                      <img
+                                        src={assignedAgent.avatar}
+                                        alt={assignedAgent.name}
+                                        className="w-5.5 h-5.5 rounded-sm object-cover border border-[#edebe9]"
+                                      />
+                                      <span className="font-semibold text-[#605e5c] text-xs">{assignedAgent.name.split(' ')[0]}</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-[10px] text-[#d13438] font-bold bg-[#fff1f1] border border-[#d13438]/10 px-2 py-0.5 rounded-sm">UNASSIGNED</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <span className={`px-2 py-0.5 text-[9px] font-bold rounded-sm border ${getStatusColor(tkt.status)}`}>
+                                  {tkt.status}
+                                </span>
+                              </td>
+                              <td className="p-4 pr-4 text-center">
+                                <button
+                                  onClick={() => setSelectedTicketId(tkt.id)}
+                                  className="bg-[#0078d4] hover:bg-[#106ebe] text-white font-extrabold text-[11px] px-3 py-1.5 rounded-sm shadow-sm cursor-pointer transition-colors"
+                                >
+                                  Manage
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           ) : (
@@ -829,14 +1216,28 @@ export default function AgentPortal({
                         );
                       }
 
-                      const isMe = msg.sender === 'agent';
+                      // If raised to SaaS, "Me" (this portal user/agent) is the 'customer' sender, and "SaaS operator" is 'agent'
+                      const isMe = activeTicket.raisedToSaaS
+                        ? msg.sender === 'customer'
+                        : msg.sender === 'agent';
+                      
+                      const avatarBg = isMe
+                        ? (activeTicket.raisedToSaaS ? 'bg-purple-700' : 'bg-[#252525]')
+                        : (activeTicket.raisedToSaaS ? 'bg-[#252525]' : 'bg-[#0078d4]');
+                      
+                      const avatarText = isMe
+                        ? (activeTicket.raisedToSaaS ? 'SU' : 'TR')
+                        : (activeTicket.raisedToSaaS ? 'SA' : 'CL');
+
+                      const bubbleBg = isMe
+                        ? (activeTicket.raisedToSaaS ? 'bg-purple-700 text-white' : 'bg-[#252525] text-white')
+                        : 'bg-white text-[#323130] border border-[#edebe9]';
+
                       return (
                         <div key={msg.id} className={`flex gap-3 max-w-lg ${isMe ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}>
                           {/* Avatar */}
-                          <div className={`w-8 h-8 rounded-sm flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden ${
-                            isMe ? 'bg-[#252525]' : 'bg-[#0078d4]'
-                          }`}>
-                            {isMe ? 'TR' : 'CL'}
+                          <div className={`w-8 h-8 rounded-sm flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden ${avatarBg}`}>
+                            {avatarText}
                           </div>
 
                           <div className="space-y-1">
@@ -847,17 +1248,13 @@ export default function AgentPortal({
                               </span>
                             </div>
 
-                            <div className={`p-3 rounded-sm text-xs leading-relaxed shadow-sm ${
-                              isMe
-                                ? 'bg-[#252525] text-white'
-                                : 'bg-white text-[#323130] border border-[#edebe9]'
-                            }`}>
+                            <div className={`p-3 rounded-sm text-xs leading-relaxed shadow-sm ${bubbleBg}`}>
                               <p className="whitespace-pre-wrap">{msg.message}</p>
 
                               {msg.attachmentName && (
                                 <div className={`mt-2 p-1.5 rounded-sm flex items-center gap-1.5 text-[10px] font-semibold border ${
                                   isMe
-                                    ? 'bg-[#3b3b3b] text-white border-[#edebe9]/20'
+                                    ? 'bg-white/10 text-white border-white/10'
                                     : 'bg-[#f3f2f1] text-[#323130] border-[#edebe9]'
                                 }`}>
                                   <Lucide.FileText size={12} />
@@ -879,34 +1276,36 @@ export default function AgentPortal({
               {activeTicket && (
                 <div className="border-t border-[#edebe9] bg-white p-4 space-y-3 shrink-0">
                   {/* Quick Template drop down */}
-                  <div className="flex items-center gap-2">
-                    <Lucide.Sliders size={13} className="text-[#0078d4]" />
-                    <span className="text-[10px] font-extrabold text-[#605e5c] uppercase tracking-wider">Quick Response Templates:</span>
-                    <select
-                      value={selectedTemplate}
-                      onChange={handleTemplateChange}
-                      className="bg-[#f3f2f1] hover:bg-[#edebe9] text-[11px] text-[#323130] border border-[#edebe9] rounded-sm px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#0078d4] font-semibold cursor-pointer max-w-sm truncate"
-                    >
-                      <option value="">-- Click to insert Template --</option>
-                      {QUICK_TEMPLATES.map((tpl, idx) => (
-                        <option key={idx} value={tpl}>Template {idx + 1}: {tpl.slice(0, 40)}...</option>
-                      ))}
-                    </select>
-                  </div>
+                  {!activeTicket.raisedToSaaS && (
+                    <div className="flex items-center gap-2">
+                      <Lucide.Sliders size={13} className="text-[#0078d4]" />
+                      <span className="text-[10px] font-extrabold text-[#605e5c] uppercase tracking-wider">Quick Response Templates:</span>
+                      <select
+                        value={selectedTemplate}
+                        onChange={handleTemplateChange}
+                        className="bg-[#f3f2f1] hover:bg-[#edebe9] text-[11px] text-[#323130] border border-[#edebe9] rounded-sm px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#0078d4] font-semibold cursor-pointer max-w-sm truncate"
+                      >
+                        <option value="">-- Click to insert Template --</option>
+                        {QUICK_TEMPLATES.map((tpl, idx) => (
+                          <option key={idx} value={tpl}>Template {idx + 1}: {tpl.slice(0, 40)}...</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   {/* Form input */}
                   <form onSubmit={handleSendAgentReply} className="flex gap-2">
                     <textarea
                       value={agentReply}
                       onChange={(e) => setAgentReply(e.target.value)}
-                      placeholder="Write your diagnostic reply or click template above..."
+                      placeholder={activeTicket.raisedToSaaS ? "Reply to the SaaS engineering support team..." : "Write your diagnostic reply or click template above..."}
                       rows={2}
                       className="flex-1 bg-[#f3f2f1] border border-[#edebe9] rounded-sm p-2 text-xs focus:ring-1 focus:ring-[#0078d4] focus:outline-none text-[#323130] font-sans"
                     ></textarea>
                     <div className="flex flex-col gap-2 shrink-0 justify-end">
                       <button
                         type="submit"
-                        className="bg-[#0078d4] hover:bg-[#106ebe] text-white font-bold rounded-sm px-4 py-2 text-xs cursor-pointer transition-colors"
+                        className={`font-bold rounded-sm px-4 py-2 text-xs cursor-pointer transition-colors ${activeTicket.raisedToSaaS ? 'bg-purple-700 hover:bg-purple-800 text-white' : 'bg-[#0078d4] hover:bg-[#106ebe] text-white'}`}
                       >
                         Send Reply
                       </button>
@@ -926,116 +1325,162 @@ export default function AgentPortal({
                   </div>
 
                   {/* Quick Action buttons (Resolve/Close) */}
-                  <div className="flex gap-2">
-                    {activeTicket.status !== 'resolved' && activeTicket.status !== 'closed' && (
-                      <button
-                        onClick={() => onUpdateStatus(activeTicket.id, 'resolved')}
-                        className="flex-1 bg-[#107c10] hover:bg-[#0b5a0b] text-white font-bold py-2 text-xs rounded-sm shadow-sm transition-colors cursor-pointer text-center"
-                      >
-                        ✔ Mark Resolved
-                      </button>
-                    )}
-                    {activeTicket.status !== 'closed' && (
-                      <button
-                        onClick={() => onUpdateStatus(activeTicket.id, 'closed')}
-                        className="flex-1 bg-[#f3f2f1] hover:bg-[#edebe9] text-[#605e5c] font-bold py-2 text-xs rounded-sm border border-[#edebe9] transition-colors cursor-pointer text-center"
-                      >
-                        🔒 Close Ticket
-                      </button>
-                    )}
-                  </div>
+                  {!activeTicket.raisedToSaaS ? (
+                    <div className="flex gap-2">
+                      {activeTicket.status !== 'resolved' && activeTicket.status !== 'closed' && (
+                        <button
+                          onClick={() => onUpdateStatus(activeTicket.id, 'resolved')}
+                          className="flex-1 bg-[#107c10] hover:bg-[#0b5a0b] text-white font-bold py-2 text-xs rounded-sm shadow-sm transition-colors cursor-pointer text-center"
+                        >
+                          ✔ Mark Resolved
+                        </button>
+                      )}
+                      {activeTicket.status !== 'closed' && (
+                        <button
+                          onClick={() => onUpdateStatus(activeTicket.id, 'closed')}
+                          className="flex-1 bg-[#f3f2f1] hover:bg-[#edebe9] text-[#605e5c] font-bold py-2 text-xs rounded-sm border border-[#edebe9] transition-colors cursor-pointer text-center"
+                        >
+                          🔒 Close Ticket
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-purple-50 border border-purple-100 rounded-sm p-3 text-[11px] text-purple-900 leading-relaxed">
+                      <p className="font-bold flex items-center gap-1"><Lucide.LifeBuoy size={12} /> SaaS Platform Escalation</p>
+                      <p className="mt-1 text-purple-700">This ticket is routed directly to the Super Admin engineering squad for the Trueline SaaS platform. Local agent reassignments are disabled.</p>
+                    </div>
+                  )}
 
                   {/* Triage Settings Panel */}
-                  <div className="bg-[#f8f8f8] border border-[#edebe9] rounded-sm p-3.5 space-y-3.5 text-xs">
-                    {/* Assign Agent */}
-                    <div>
-                      <label className="block text-[9px] font-bold text-[#605e5c] uppercase mb-1">Assigned Support Staff</label>
-                      <select
-                        value={activeTicket.assignedAgentId || ''}
-                        onChange={(e) => onAssignAgent(activeTicket.id, e.target.value)}
-                        className="w-full bg-white border border-[#edebe9] rounded-sm px-2 py-1 font-semibold text-[#323130] focus:outline-none"
-                      >
-                        <option value="">-- Select Agent --</option>
-                        {MOCK_AGENTS.map(agt => (
-                          <option key={agt.id} value={agt.id}>{agt.name} ({agt.role.split(' ')[0]})</option>
-                        ))}
-                      </select>
-                    </div>
+                  {!activeTicket.raisedToSaaS ? (
+                    <div className="bg-[#f8f8f8] border border-[#edebe9] rounded-sm p-3.5 space-y-3.5 text-xs">
+                      {/* Assign Agent */}
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#605e5c] uppercase mb-1">Assigned Support Staff</label>
+                        <select
+                          value={activeTicket.assignedAgentId || ''}
+                          onChange={(e) => onAssignAgent(activeTicket.id, e.target.value)}
+                          className="w-full bg-white border border-[#edebe9] rounded-sm px-2 py-1 font-semibold text-[#323130] focus:outline-none"
+                        >
+                          <option value="">-- Select Agent --</option>
+                          {MOCK_AGENTS.map(agt => (
+                            <option key={agt.id} value={agt.id}>{agt.name} ({agt.role.split(' ')[0]})</option>
+                          ))}
+                        </select>
+                      </div>
 
-                    {/* Change Priority */}
-                    <div>
-                      <label className="block text-[9px] font-bold text-[#605e5c] uppercase mb-1">Severity / Priority</label>
-                      <div className="grid grid-cols-4 gap-1">
-                        {(['low', 'medium', 'high', 'critical'] as TicketPriority[]).map((p) => (
-                          <button
-                            key={p}
-                            onClick={() => onUpdatePriority(activeTicket.id, p)}
-                            className={`py-1 text-[9px] uppercase font-bold border rounded-sm transition-colors cursor-pointer ${
-                              activeTicket.priority === p
-                                ? 'bg-[#0078d4] text-white border-[#0078d4]'
-                                : 'bg-white text-[#605e5c] border-[#edebe9] hover:bg-[#f3f2f1]'
-                            }`}
-                          >
-                            {p}
-                          </button>
-                        ))}
+                      {/* Change Priority */}
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#605e5c] uppercase mb-1">Severity / Priority</label>
+                        <div className="grid grid-cols-4 gap-1">
+                          {(['low', 'medium', 'high', 'critical'] as TicketPriority[]).map((p) => (
+                            <button
+                              key={p}
+                              onClick={() => onUpdatePriority(activeTicket.id, p)}
+                              className={`py-1 text-[9px] uppercase font-bold border rounded-sm transition-colors cursor-pointer ${
+                                activeTicket.priority === p
+                                  ? 'bg-[#0078d4] text-white border-[#0078d4]'
+                                  : 'bg-white text-[#605e5c] border-[#edebe9] hover:bg-[#f3f2f1]'
+                              }`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Change Status manually */}
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#605e5c] uppercase mb-1">Ticket Progress Status</label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {(['open', 'in_progress', 'pending', 'resolved'] as TicketStatus[]).map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => onUpdateStatus(activeTicket.id, s)}
+                              className={`py-1 px-1.5 text-[9px] uppercase font-bold border rounded-sm truncate transition-colors cursor-pointer ${
+                                activeTicket.status === s
+                                  ? 'bg-[#d13438] text-white border-[#d13438]'
+                                  : 'bg-white text-[#605e5c] border-[#edebe9] hover:bg-[#f3f2f1]'
+                              }`}
+                            >
+                              {s === 'in_progress' ? 'working' : s}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
-
-                    {/* Change Status manually */}
-                    <div>
-                      <label className="block text-[9px] font-bold text-[#605e5c] uppercase mb-1">Ticket Progress Status</label>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {(['open', 'in_progress', 'pending', 'resolved'] as TicketStatus[]).map((s) => (
-                          <button
-                            key={s}
-                            onClick={() => onUpdateStatus(activeTicket.id, s)}
-                            className={`py-1 px-1.5 text-[9px] uppercase font-bold border rounded-sm truncate transition-colors cursor-pointer ${
-                              activeTicket.status === s
-                                ? 'bg-[#d13438] text-white border-[#d13438]'
-                                : 'bg-white text-[#605e5c] border-[#edebe9] hover:bg-[#f3f2f1]'
-                            }`}
-                          >
-                            {s === 'in_progress' ? 'working' : s}
-                          </button>
-                        ))}
+                  ) : (
+                    <div className="bg-[#f8f8f8] border border-[#edebe9] rounded-sm p-3.5 space-y-3.5 text-xs">
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#605e5c] uppercase mb-1">Ticket Severity</label>
+                        <span className={`px-2.5 py-1 text-[10px] font-bold rounded-sm border inline-block uppercase ${getPriorityColor(activeTicket.priority)}`}>
+                          {activeTicket.priority}
+                        </span>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold text-[#605e5c] uppercase mb-1">Escalated Status</label>
+                        <span className={`px-2.5 py-1 text-[10px] font-bold rounded-sm border inline-block uppercase ${getStatusColor(activeTicket.status)}`}>
+                          {activeTicket.status}
+                        </span>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Client CRM Profile Card */}
-                  <div className="bg-white border border-[#edebe9] rounded-sm p-3.5 shadow-sm text-xs space-y-2">
-                    <span className="text-[9px] font-bold text-[#605e5c] uppercase block">Client CRM Record</span>
-                    
-                    {activeClientCRM ? (
+                  {!activeTicket.raisedToSaaS ? (
+                    <div className="bg-white border border-[#edebe9] rounded-sm p-3.5 shadow-sm text-xs space-y-2">
+                      <span className="text-[9px] font-bold text-[#605e5c] uppercase block">Client CRM Record</span>
+                      
+                      {activeClientCRM ? (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-sm bg-[#f3f2f1] text-[#0078d4] font-bold flex items-center justify-center text-[10px] border border-[#edebe9]">
+                              {activeClientCRM.company.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <span className="font-bold text-[#323130]">{activeClientCRM.company}</span>
+                              <span className="text-[10px] text-[#605e5c] block -mt-0.5">{activeClientCRM.name}</span>
+                            </div>
+                          </div>
+                          <div className="border-t border-[#edebe9] pt-1.5 space-y-1 text-[10px] text-[#605e5c]">
+                            <p>● Direct Phone: <strong className="text-[#323130]">{activeClientCRM.phone}</strong></p>
+                            <p>● Pipeline status: <span className="bg-[#fffdf0] text-[#d83b01] px-1 rounded-sm font-bold border border-[#d83b01]/10">{activeClientCRM.status}</span></p>
+                            <p>● Annualized Contract: <strong className="text-[#323130]">{activeClientCRM.value}</strong></p>
+                          </div>
+                          <button className="w-full text-center py-1 bg-[#f3f2f1] hover:bg-[#edebe9] text-[#0078d4] text-[10px] font-extrabold rounded-sm mt-1.5 cursor-not-allowed border border-[#edebe9]">
+                            🔗 Open Customer Ledger File
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5 text-[10px] text-[#605e5c]">
+                          <p>● Customer: <strong className="text-[#323130]">{activeTicket.customerName}</strong></p>
+                          <p>● Contact: <strong className="text-[#323130]">{activeTicket.customerPhone || 'N/A'}</strong></p>
+                          <p>● Mailbox: <span className="underline">{activeTicket.customerEmail}</span></p>
+                          <span className="text-[9px] text-[#d83b01] italic block mt-1 font-medium">Manual contact (not currently pre-mapped in lead contacts list).</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-purple-50/50 border border-purple-100 rounded-sm p-3.5 shadow-sm text-xs space-y-2">
+                      <span className="text-[9px] font-bold text-purple-800 uppercase block">Subscriber Corporate Details</span>
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-sm bg-[#f3f2f1] text-[#0078d4] font-bold flex items-center justify-center text-[10px] border border-[#edebe9]">
-                            {activeClientCRM.company.slice(0, 2).toUpperCase()}
+                          <div className="w-6 h-6 rounded-sm bg-purple-700 text-white font-bold flex items-center justify-center text-[10px] border border-purple-800">
+                            {tenant?.companyName?.slice(0, 2).toUpperCase() || 'TR'}
                           </div>
                           <div>
-                            <span className="font-bold text-[#323130]">{activeClientCRM.company}</span>
-                            <span className="text-[10px] text-[#605e5c] block -mt-0.5">{activeClientCRM.name}</span>
+                            <span className="font-bold text-purple-900">{tenant?.companyName || 'Subscriber Company'}</span>
+                            <span className="text-[10px] text-purple-700 block -mt-0.5">{tenant?.ownerName || 'Company Admin'}</span>
                           </div>
                         </div>
-                        <div className="border-t border-[#edebe9] pt-1.5 space-y-1 text-[10px] text-[#605e5c]">
-                          <p>● Direct Phone: <strong className="text-[#323130]">{activeClientCRM.phone}</strong></p>
-                          <p>● Pipeline status: <span className="bg-[#fffdf0] text-[#d83b01] px-1 rounded-sm font-bold border border-[#d83b01]/10">{activeClientCRM.status}</span></p>
-                          <p>● Annualized Contract: <strong className="text-[#323130]">{activeClientCRM.value}</strong></p>
+                        <div className="border-t border-purple-200/50 pt-1.5 space-y-1 text-[10px] text-purple-700">
+                          <p>● Cloud Tenant ID: <strong className="text-purple-900 font-mono">{tenant?.id || 'default'}</strong></p>
+                          <p>● Platform License: <span className="bg-purple-100 text-purple-800 px-1 rounded-sm font-bold border border-purple-200 uppercase">{tenant?.plan || 'Standard'} License</span></p>
+                          <p>● Admin Contact: <strong className="text-purple-900">{tenant?.ownerEmail || 'admin@tenant.com'}</strong></p>
                         </div>
-                        <button className="w-full text-center py-1 bg-[#f3f2f1] hover:bg-[#edebe9] text-[#0078d4] text-[10px] font-extrabold rounded-sm mt-1.5 cursor-not-allowed border border-[#edebe9]">
-                          🔗 Open Customer Ledger File
-                        </button>
                       </div>
-                    ) : (
-                      <div className="space-y-1.5 text-[10px] text-[#605e5c]">
-                        <p>● Customer: <strong className="text-[#323130]">{activeTicket.customerName}</strong></p>
-                        <p>● Contact: <strong className="text-[#323130]">{activeTicket.customerPhone || 'N/A'}</strong></p>
-                        <p>● Mailbox: <span className="underline">{activeTicket.customerEmail}</span></p>
-                        <span className="text-[9px] text-[#d83b01] italic block mt-1 font-medium">Manual contact (not currently pre-mapped in lead contacts list).</span>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* ISO/Regulatory footer */}

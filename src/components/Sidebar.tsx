@@ -33,6 +33,7 @@ interface SidebarProps {
   isAgentMode: boolean;
   setIsAgentMode: (mode: boolean) => void;
   isAdminLoggedIn?: boolean;
+  currentRole?: 'super_admin' | 'company_admin' | 'public_client';
 }
 
 export default function Sidebar({
@@ -41,7 +42,8 @@ export default function Sidebar({
   openTicketsCount,
   isAgentMode,
   setIsAgentMode,
-  isAdminLoggedIn
+  isAdminLoggedIn,
+  currentRole
 }: SidebarProps) {
   const [hrExpanded, setHrExpanded] = useState(true);
   const [settingsExpanded, setSettingsExpanded] = useState(false);
@@ -161,38 +163,41 @@ export default function Sidebar({
             )}
           </button>
 
-          {/* Helpdesk Shareable Link Configuration Tab */}
-          {isAgentMode && (
-            <button
-              onClick={() => setCurrentTab('helpdesk_setup')}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-sm text-sm font-semibold transition-all cursor-pointer ${
-                currentTab === 'helpdesk_setup'
-                  ? 'bg-gradient-to-r from-[#0078d4] to-indigo-600 text-white shadow-sm'
-                  : 'text-gray-300 hover:text-white hover:bg-[#3b3b3b]'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Sliders size={17} className={currentTab === 'helpdesk_setup' ? 'text-white' : 'text-[#ffb900]'} />
-                <span>Helpdesk Public Link</span>
-              </div>
-              <span className="text-[8px] bg-emerald-500/20 text-emerald-400 font-bold px-1 rounded-sm">LIVE</span>
-            </button>
-          )}
+          {/* Render Helpdesk Public Link and SaaS Support & Help ONLY for Subscriber (company_admin) */}
+          {currentRole !== 'super_admin' && (
+            <>
+              {isAgentMode && (
+                <button
+                  onClick={() => setCurrentTab('helpdesk_setup')}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-sm text-sm font-semibold transition-all cursor-pointer ${
+                    currentTab === 'helpdesk_setup'
+                      ? 'bg-gradient-to-r from-[#0078d4] to-indigo-600 text-white shadow-sm'
+                      : 'text-gray-300 hover:text-white hover:bg-[#3b3b3b]'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Sliders size={17} className={currentTab === 'helpdesk_setup' ? 'text-white' : 'text-[#ffb900]'} />
+                    <span>Helpdesk Public Link</span>
+                  </div>
+                  <span className="text-[8px] bg-emerald-500/20 text-emerald-400 font-bold px-1 rounded-sm">LIVE</span>
+                </button>
+              )}
 
-          {/* SaaS Support Ticket Access */}
-          <button
-            onClick={() => setCurrentTab('saas_support')}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-sm text-sm font-semibold transition-all cursor-pointer ${
-              currentTab === 'saas_support'
-                ? 'bg-gradient-to-r from-purple-700 to-indigo-600 text-white shadow-sm'
-                : 'text-gray-300 hover:text-white hover:bg-[#3b3b3b]'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <LifeBuoy size={17} className={currentTab === 'saas_support' ? 'text-white' : 'text-purple-400'} />
-              <span>SaaS Support & Help</span>
-            </div>
-          </button>
+              <button
+                onClick={() => setCurrentTab('saas_support')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-sm text-sm font-semibold transition-all cursor-pointer ${
+                  currentTab === 'saas_support'
+                    ? 'bg-gradient-to-r from-purple-700 to-indigo-600 text-white shadow-sm'
+                    : 'text-gray-300 hover:text-white hover:bg-[#3b3b3b]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <LifeBuoy size={17} className={currentTab === 'saas_support' ? 'text-white' : 'text-purple-400'} />
+                  <span>SaaS Support & Help</span>
+                </div>
+              </button>
+            </>
+          )}
 
           {/* Other simulated CRM items matching image 2 */}
           <div className="opacity-60 space-y-0.5">
