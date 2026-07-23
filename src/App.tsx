@@ -608,7 +608,12 @@ export default function App() {
 
   // Multi-Tenant Isolation Filtering:
   const currentTenant = tenants.find(t => t.id.toLowerCase() === currentTenantId.toLowerCase()) || tenants[0];
-  const tenantTickets = tickets.filter(t => !t.tenantId || t.tenantId.toLowerCase() === currentTenant.id.toLowerCase());
+  const tenantTickets = tickets.filter(t => {
+    if (!t.tenantId) {
+      return currentTenant.id.toLowerCase() === 'custom' || currentTenant.id.toLowerCase() === 'trueline-solutions';
+    }
+    return t.tenantId.toLowerCase() === currentTenant.id.toLowerCase();
+  });
 
   // Active Open tickets count for Sidebar badge (Filtered by role!)
   const openCount = currentRole === 'super_admin'
@@ -819,7 +824,7 @@ export default function App() {
 
                   {currentTab === 'support' && (
                     <AgentPortal
-                      tickets={tickets}
+                      tickets={tenantTickets}
                       allTenants={tenants}
                       categories={categories}
                       onUpdateStatus={handleUpdateStatus}
