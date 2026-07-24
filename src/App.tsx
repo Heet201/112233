@@ -374,9 +374,7 @@ export default function App() {
         .then((serverTickets: Ticket[]) => {
           if (Array.isArray(serverTickets)) {
             setTickets((prev) => {
-              const prevSig = prev.map(t => `${t.id}:${t.status}:${t.updatedAt}:${t.messages?.length||0}`).join('|');
-              const serverSig = serverTickets.map(t => `${t.id}:${t.status}:${t.updatedAt}:${t.messages?.length||0}`).join('|');
-              if (prevSig !== serverSig || prev.length !== serverTickets.length) {
+              if (JSON.stringify(prev) !== JSON.stringify(serverTickets)) {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(serverTickets));
                 return serverTickets;
               }

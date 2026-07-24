@@ -220,12 +220,21 @@ export default function CustomerPortal({
     // Generate beautiful ticket prefix based on tenant ID with guaranteed unique ID
     const prefix = activeTenant.id.toUpperCase().slice(0, 4);
     const existingNums = tickets.map(t => {
-      const match = t.id.match(/(\d+)$/);
+      const match = t.id.match(/(\d+)/);
       return match ? parseInt(match[1], 10) : 0;
     }).filter(n => !isNaN(n));
     const maxNum = existingNums.length > 0 ? Math.max(...existingNums) : 1000;
-    const nextNum = Math.max(maxNum + 1, 1001);
-    const newId = `${prefix}-${nextNum}`;
+    let nextNum = Math.max(maxNum + 1, 1001);
+    let newId = `${prefix}-${nextNum}`;
+
+    while (tickets.some(t => t.id === newId)) {
+      nextNum++;
+      newId = `${prefix}-${nextNum}`;
+    }
+
+    // Unique random salt so concurrent Incognito/different browser sessions never collide
+    const salt = Math.floor(100 + Math.random() * 900);
+    newId = `${newId}-${salt}`;
 
     const systemMsg: TicketMessage = {
       id: `msg-${Date.now()}-sys`,
