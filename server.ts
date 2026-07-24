@@ -1,0 +1,104 @@
+import express from 'express';
+import path from 'path';
+import { createServer as createViteServer } from 'vite';
+import { MOCK_TICKETS, INITIAL_TENANTS, SUPPORT_CATEGORIES } from './src/data';
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(express.json({ limit: '10mb' }));
+
+// Central Server Memory Persistence
+let ticketsStore = [...MOCK_TICKETS];
+let tenantsStore = [...INITIAL_TENANTS];
+let categoriesStore = [...SUPPORT_CATEGORIES];
+
+// API Endpoints
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
+app.get('/api/tickets', (req, res) => {
+  res.json(ticketsStore);
+});
+
+app.post('/api/tickets', (req, res) => {
+  const payload = req.body;
+  if (Array.isArray(payload)) {
+    ticketsStore = payload;
+  } else if (payload && payload.id) {
+    const existingIndex = ticketsStore.findIndex(t => t.id === payload.id);
+    if (existingIndex >= 0) {
+      ticketsStore[existingIndex] = { ...ticketsStore[existingIndex], ...payload };
+    } else {
+      ticketsStore.unshift(payload);
+    }
+  }
+  res.json(ticketsStore);
+});
+
+app.delete('/api/tickets/:id', (req, res) => {
+  const { id } = req.params;
+  ticketsStore = ticketsStore.filter(t => t.id !== id);
+  res.json(ticketsStore);
+});
+
+app.get('/api/tenants', (req, res) => {
+  res.json(tenantsStore);
+});
+
+app.post('/api/tenants', (req, res) => {
+  const payload = req.body;
+  if (Array.isArray(payload)) {
+    tenantsStore = payload;
+  } else if (payload && payload.id) {
+    const existingIndex = tenantsStore.findIndex(t => t.id === payload.id);
+    if (existingIndex >= 0) {
+      tenantsStore[existingIndex] = { ...tenantsStore[existingIndex], ...payload };
+    } else {
+      tenantsStore.push(payload);
+    }
+  }
+  res.json(tenantsStore);
+});
+
+app.get('/api/categories', (req, res) => {
+  res.json(categoriesStore);
+});
+
+app.post('/api/categories', (req, res) => {
+  const payload = req.body;
+  if (Array.isArray(payload)) {
+    categoriesStore = payload;
+  } else if (payload && payload.id) {
+    const existingIndex = categoriesStore.findIndex((c: any) => c.id === payload.id);
+    if (existingIndex >= 0) {
+      categoriesStore[existingIndex] = { ...categoriesStore[existingIndex], ...payload };
+    } else {
+      categoriesStore.push(payload);
+    }
+  }
+  res.json(categoriesStore);
+});
+
+async function startServer() {
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(Number(PORT), '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  });
+}
+
+startServer();

@@ -286,14 +286,31 @@ export default function App() {
     setIsAgentMode(false);
   };
 
-  // Load tickets on mount and set up real-time cross-tab/cross-window sync (BroadcastChannel + storage + 800ms polling)
+  // Helper functions to sync with central Express backend
+  const syncTicketToServer = (payload: Ticket | Ticket[]) => {
+    fetch('/api/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(err => console.error('Error syncing ticket to server:', err));
+  };
+
+  const syncTenantsToServer = (payload: Tenant | Tenant[]) => {
+    fetch('/api/tenants', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(err => console.error('Error syncing tenants to server:', err));
+  };
+
+  // Load tickets & tenants on mount and set up real-time cross-browser polling via Express server API
   useEffect(() => {
+    // 1. Initial local load
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         setTickets(JSON.parse(saved));
       } catch (e) {
-        console.error('Failed to parse saved tickets database', e);
         setTickets(MOCK_TICKETS);
       }
     } else {
@@ -301,7 +318,32 @@ export default function App() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(MOCK_TICKETS));
     }
 
-    // 1. BroadcastChannel API for 0ms latency sync across tabs/windows
+    // Initial fetch from backend server
+    fetch('/api/tickets')
+      .then(res => res.json())
+      .then((serverTickets: Ticket[]) => {
+        if (Array.isArray(serverTickets) && serverTickets.length > 0) {
+          setTickets(serverTickets);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(serverTickets));
+        } else {
+          // Push initial local tickets to server
+          const localOrMock = saved ? JSON.parse(saved) : MOCK_TICKETS;
+          syncTicketToServer(localOrMock);
+        }
+      })
+      .catch(err => console.log('Server API offline, using local storage fallback', err));
+
+    fetch('/api/tenants')
+      .then(res => res.json())
+      .then((serverTenants: Tenant[]) => {
+        if (Array.isArray(serverTenants) && serverTenants.length > 0) {
+          setTenants(serverTenants);
+          localStorage.setItem('trueline_crm_tenants_list_v1', JSON.stringify(serverTenants));
+        }
+      })
+      .catch(err => console.log('Server tenants API offline', err));
+
+    // 2. BroadcastChannel API for instant tab sync
     let bc: BroadcastChannel | null = null;
     if (typeof BroadcastChannel !== 'undefined') {
       try {
@@ -317,63 +359,40 @@ export default function App() {
       } catch (err) {}
     }
 
-    // 2. Storage event listener for standard window event sync
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue) {
-        try {
-          setTickets(JSON.parse(e.newValue));
-        } catch (err) {
-          console.error('Failed to sync tickets from storage event', err);
-        }
-      }
-      if (e.key === 'trueline_crm_tenants_list_v1' && e.newValue) {
-        try {
-          setTenants(JSON.parse(e.newValue));
-        } catch (err) {
-          console.error('Failed to sync tenants from storage event', err);
-        }
-      }
-      if (e.key === 'trueline_365_crm_categories' && e.newValue) {
-        try {
-          setCategories(JSON.parse(e.newValue));
-        } catch (err) {
-          console.error('Failed to sync categories from storage event', err);
-        }
-      }
-    };
-
-    // 3. Fast 800ms polling interval to guarantee sync in iframe sandboxes or separate windows
+    // 3. Fast 1000ms polling from server so tickets raised from DIFFERENT Chrome browsers/devices show up automatically
     const interval = setInterval(() => {
-      const savedTickets = localStorage.getItem(STORAGE_KEY);
-      if (savedTickets) {
-        try {
-          const parsed = JSON.parse(savedTickets);
-          setTickets((prev) => {
-            if (JSON.stringify(prev) !== JSON.stringify(parsed)) {
-              return parsed;
-            }
-            return prev;
-          });
-        } catch (err) {}
-      }
+      fetch('/api/tickets')
+        .then(res => res.json())
+        .then((serverTickets: Ticket[]) => {
+          if (Array.isArray(serverTickets)) {
+            setTickets((prev) => {
+              if (JSON.stringify(prev) !== JSON.stringify(serverTickets)) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(serverTickets));
+                return serverTickets;
+              }
+              return prev;
+            });
+          }
+        })
+        .catch(() => {});
 
-      const savedTenants = localStorage.getItem('trueline_crm_tenants_list_v1');
-      if (savedTenants) {
-        try {
-          const parsed = JSON.parse(savedTenants);
-          setTenants((prev) => {
-            if (JSON.stringify(prev) !== JSON.stringify(parsed)) {
-              return parsed;
-            }
-            return prev;
-          });
-        } catch (err) {}
-      }
-    }, 800);
+      fetch('/api/tenants')
+        .then(res => res.json())
+        .then((serverTenants: Tenant[]) => {
+          if (Array.isArray(serverTenants)) {
+            setTenants((prev) => {
+              if (JSON.stringify(prev) !== JSON.stringify(serverTenants)) {
+                localStorage.setItem('trueline_crm_tenants_list_v1', JSON.stringify(serverTenants));
+                return serverTenants;
+              }
+              return prev;
+            });
+          }
+        })
+        .catch(() => {});
+    }, 1000);
 
-    window.addEventListener('storage', handleStorageChange);
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
       clearInterval(interval);
       if (bc) bc.close();
     };
@@ -383,6 +402,7 @@ export default function App() {
   const handleUpdateTenant = (updated: Tenant) => {
     setTenants((prev) => {
       const updatedList = prev.map(t => t.id === updated.id ? updated : t);
+      syncTenantsToServer(updatedList);
       return updatedList;
     });
   };
@@ -390,7 +410,9 @@ export default function App() {
   // Register a new tenant corporate subscriber
   const handleAddTenant = (newTenant: Tenant) => {
     setTenants((prev) => {
-      return [...prev, newTenant];
+      const updatedList = [...prev, newTenant];
+      syncTenantsToServer(updatedList);
+      return updatedList;
     });
 
     // Seed a dynamic welcome ticket inside the new Tenant Helpdesk so they see how it routes
@@ -423,6 +445,7 @@ export default function App() {
       const updated = [welcomeTicket, ...prev];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       broadcastSync('SYNC_TICKETS', updated);
+      syncTicketToServer(updated);
       return updated;
     });
   };
@@ -433,6 +456,7 @@ export default function App() {
       const updated = [newTicket, ...prev];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       broadcastSync('SYNC_TICKETS', updated);
+      syncTicketToServer(updated);
       return updated;
     });
   };
@@ -452,6 +476,7 @@ export default function App() {
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       broadcastSync('SYNC_TICKETS', updated);
+      syncTicketToServer(updated);
       return updated;
     });
   };
@@ -481,6 +506,7 @@ export default function App() {
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       broadcastSync('SYNC_TICKETS', updated);
+      syncTicketToServer(updated);
       return updated;
     });
   };
@@ -510,6 +536,7 @@ export default function App() {
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       broadcastSync('SYNC_TICKETS', updated);
+      syncTicketToServer(updated);
       return updated;
     });
   };
@@ -542,6 +569,7 @@ export default function App() {
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       broadcastSync('SYNC_TICKETS', updated);
+      syncTicketToServer(updated);
       return updated;
     });
   };
@@ -572,6 +600,7 @@ export default function App() {
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       broadcastSync('SYNC_TICKETS', updated);
+      syncTicketToServer(updated);
       return updated;
     });
   };
@@ -602,6 +631,7 @@ export default function App() {
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       broadcastSync('SYNC_TICKETS', updated);
+      syncTicketToServer(updated);
       return updated;
     });
   };
