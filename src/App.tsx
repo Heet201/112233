@@ -656,7 +656,7 @@ export default function App() {
   // Active Open tickets count for Sidebar badge (Filtered by role!)
   const openCount = currentRole === 'super_admin'
     ? tickets.filter(t => t.raisedToSaaS && (t.status === 'open' || t.status === 'in_progress')).length
-    : tenantTickets.filter(t => !t.raisedToSaaS && (t.status === 'open' || t.status === 'in_progress')).length;
+    : tickets.filter(t => !t.raisedToSaaS && (t.status === 'open' || t.status === 'in_progress')).length;
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#faf9f8] text-slate-800">
@@ -862,7 +862,7 @@ export default function App() {
 
                   {currentTab === 'support' && (
                     <AgentPortal
-                      tickets={tenantTickets}
+                      tickets={tickets.filter(t => !t.raisedToSaaS)}
                       allTenants={tenants}
                       categories={categories}
                       onUpdateStatus={handleUpdateStatus}

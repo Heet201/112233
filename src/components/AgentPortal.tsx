@@ -183,12 +183,12 @@ export default function AgentPortal({
   // Filter tickets for workspace list
   const filteredTickets = tickets.filter(tkt => {
     const matchesSource = inboxSource === 'saas' ? tkt.raisedToSaaS : !tkt.raisedToSaaS;
-    const matchesTenant = isSuperAdmin
-      ? (tenantFilter === 'all' || !tkt.tenantId || tkt.tenantId.toLowerCase() === tenantFilter.toLowerCase())
+    const matchesTenant = tenantFilter === 'all'
+      ? true
       : (
           !tkt.tenantId
-            ? (tenant?.id.toLowerCase() === 'custom' || tenant?.id.toLowerCase() === 'trueline-solutions')
-            : tkt.tenantId.toLowerCase() === tenant?.id.toLowerCase()
+            ? (tenantFilter === 'custom' || tenantFilter === 'trueline-solutions')
+            : tkt.tenantId.toLowerCase() === tenantFilter.toLowerCase()
         );
     const matchesStatus = statusFilter === 'all' || tkt.status === statusFilter;
     const matchesSearch = 
