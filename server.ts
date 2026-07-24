@@ -25,7 +25,16 @@ app.get('/api/tickets', (req, res) => {
 app.post('/api/tickets', (req, res) => {
   const payload = req.body;
   if (Array.isArray(payload)) {
-    ticketsStore = payload;
+    payload.forEach((item) => {
+      if (item && item.id) {
+        const existingIndex = ticketsStore.findIndex(t => t.id === item.id);
+        if (existingIndex >= 0) {
+          ticketsStore[existingIndex] = { ...ticketsStore[existingIndex], ...item };
+        } else {
+          ticketsStore.unshift(item);
+        }
+      }
+    });
   } else if (payload && payload.id) {
     const existingIndex = ticketsStore.findIndex(t => t.id === payload.id);
     if (existingIndex >= 0) {
@@ -50,7 +59,16 @@ app.get('/api/tenants', (req, res) => {
 app.post('/api/tenants', (req, res) => {
   const payload = req.body;
   if (Array.isArray(payload)) {
-    tenantsStore = payload;
+    payload.forEach((item) => {
+      if (item && item.id) {
+        const existingIndex = tenantsStore.findIndex(t => t.id === item.id);
+        if (existingIndex >= 0) {
+          tenantsStore[existingIndex] = { ...tenantsStore[existingIndex], ...item };
+        } else {
+          tenantsStore.push(item);
+        }
+      }
+    });
   } else if (payload && payload.id) {
     const existingIndex = tenantsStore.findIndex(t => t.id === payload.id);
     if (existingIndex >= 0) {

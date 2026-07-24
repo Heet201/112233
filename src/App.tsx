@@ -292,7 +292,15 @@ export default function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }).catch(err => console.error('Error syncing ticket to server:', err));
+    })
+      .then(res => res.json())
+      .then((serverTickets: Ticket[]) => {
+        if (Array.isArray(serverTickets)) {
+          setTickets(serverTickets);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(serverTickets));
+        }
+      })
+      .catch(err => console.error('Error syncing ticket to server:', err));
   };
 
   const syncTenantsToServer = (payload: Tenant | Tenant[]) => {
@@ -456,7 +464,7 @@ export default function App() {
       const updated = [newTicket, ...prev];
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       broadcastSync('SYNC_TICKETS', updated);
-      syncTicketToServer(updated);
+      syncTicketToServer(newTicket);
       return updated;
     });
   };

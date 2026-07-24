@@ -217,10 +217,14 @@ export default function CustomerPortal({
     localStorage.setItem('trueline_public_client_email', finalEmail);
     localStorage.setItem('trueline_public_client_phone', finalPhone);
 
-    // Generate beautiful ticket prefix based on tenant ID
+    // Generate beautiful ticket prefix based on tenant ID with guaranteed unique ID
     const prefix = activeTenant.id.toUpperCase().slice(0, 4);
-    const tenantSpecificTickets = tickets.filter(t => t.tenantId === activeTenant.id);
-    const nextNum = tenantSpecificTickets.length + 1001;
+    const existingNums = tickets.map(t => {
+      const match = t.id.match(/(\d+)$/);
+      return match ? parseInt(match[1], 10) : 0;
+    }).filter(n => !isNaN(n));
+    const maxNum = existingNums.length > 0 ? Math.max(...existingNums) : 1000;
+    const nextNum = Math.max(maxNum + 1, 1001);
     const newId = `${prefix}-${nextNum}`;
 
     const systemMsg: TicketMessage = {
