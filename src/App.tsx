@@ -146,7 +146,7 @@ export default function App() {
       const nowTime = Date.now();
       const isVeryRecent = Math.abs(nowTime - createdTime) < 25000;
 
-      if (isVeryRecent) {
+      if (isVeryRecent && currentRole !== 'public_client') {
         // Retrieve tenant detail
         const matchedTenant = tenants.find(t => t.id === freshTicket.tenantId);
         const tenantName = matchedTenant ? matchedTenant.companyName : 'External Tenant';
@@ -184,7 +184,7 @@ export default function App() {
           console.warn('Audio feedback context disabled:', soundErr);
         }
 
-        // Trigger gorgeous slide-in Toast UI
+        // Trigger gorgeous slide-in Toast UI for admins/agents
         setActiveToast({
           id: freshTicket.id,
           title: freshTicket.title,
@@ -194,7 +194,7 @@ export default function App() {
         });
       }
     }
-  }, [tickets, knownTicketIds, tenants]);
+  }, [tickets, knownTicketIds, tenants, currentRole]);
 
   // URL Query/Hash Router for Direct Shareable Customer Links
   useEffect(() => {
@@ -374,7 +374,9 @@ export default function App() {
         .then((serverTickets: Ticket[]) => {
           if (Array.isArray(serverTickets)) {
             setTickets((prev) => {
-              if (JSON.stringify(prev) !== JSON.stringify(serverTickets)) {
+              const prevSig = prev.map(t => `${t.id}:${t.status}:${t.updatedAt}:${t.messages?.length||0}`).join('|');
+              const serverSig = serverTickets.map(t => `${t.id}:${t.status}:${t.updatedAt}:${t.messages?.length||0}`).join('|');
+              if (prevSig !== serverSig || prev.length !== serverTickets.length) {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(serverTickets));
                 return serverTickets;
               }

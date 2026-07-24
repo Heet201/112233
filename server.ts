@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { MOCK_TICKETS, INITIAL_TENANTS, SUPPORT_CATEGORIES } from './src/data';
 
@@ -8,9 +9,55 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '10mb' }));
 
+const TICKETS_FILE = path.join(process.cwd(), 'tickets_db.json');
+const TENANTS_FILE = path.join(process.cwd(), 'tenants_db.json');
+
+// Helper functions for persistent storage
+function loadTicketsStore(): any[] {
+  try {
+    if (fs.existsSync(TICKETS_FILE)) {
+      const data = fs.readFileSync(TICKETS_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (err) {
+    console.error('Error reading TICKETS_FILE:', err);
+  }
+  return [...MOCK_TICKETS];
+}
+
+function saveTicketsStore(data: any[]) {
+  try {
+    fs.writeFileSync(TICKETS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error writing TICKETS_FILE:', err);
+  }
+}
+
+function loadTenantsStore(): any[] {
+  try {
+    if (fs.existsSync(TENANTS_FILE)) {
+      const data = fs.readFileSync(TENANTS_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (err) {
+    console.error('Error reading TENANTS_FILE:', err);
+  }
+  return [...INITIAL_TENANTS];
+}
+
+function saveTenantsStore(data: any[]) {
+  try {
+    fs.writeFileSync(TENANTS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error writing TENANTS_FILE:', err);
+  }
+}
+
 // Central Server Memory Persistence
-let ticketsStore = [...MOCK_TICKETS];
-let tenantsStore = [...INITIAL_TENANTS];
+let ticketsStore = loadTicketsStore();
+let tenantsStore = loadTenantsStore();
 let categoriesStore = [...SUPPORT_CATEGORIES];
 
 // API Endpoints
@@ -43,12 +90,14 @@ app.post('/api/tickets', (req, res) => {
       ticketsStore.unshift(payload);
     }
   }
+  saveTicketsStore(ticketsStore);
   res.json(ticketsStore);
 });
 
 app.delete('/api/tickets/:id', (req, res) => {
   const { id } = req.params;
   ticketsStore = ticketsStore.filter(t => t.id !== id);
+  saveTicketsStore(ticketsStore);
   res.json(ticketsStore);
 });
 
@@ -77,6 +126,7 @@ app.post('/api/tenants', (req, res) => {
       tenantsStore.push(payload);
     }
   }
+  saveTenantsStore(tenantsStore);
   res.json(tenantsStore);
 });
 
